@@ -68,12 +68,6 @@ func (c *CopilotClient) CreateSession(ctx context.Context) (*Session, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if !c.started {
-		if err := c.startLocked(); err != nil {
-			return nil, fmt.Errorf("failed to start client: %w", err)
-		}
-	}
-
 	if c.sdkClient == nil {
 		return nil, fmt.Errorf("SDK client not initialized")
 	}

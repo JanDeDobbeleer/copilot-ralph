@@ -47,5 +47,3 @@ func normalizeWhitespace(s string) string {
 	fields := strings.Fields(s)
 	return strings.Join(fields, " ")
 }
-
-

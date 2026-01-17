@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-
-
 // LoopStartEvent indicates the loop has started.
 type LoopStartEvent struct {
 	// Config is the loop configuration.

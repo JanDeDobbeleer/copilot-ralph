@@ -217,6 +217,8 @@ func (m *MockSDKClient) SendPrompt(ctx context.Context, prompt string) (<-chan s
 		// Send any tool calls
 		for _, tc := range m.ToolCalls {
 			events <- sdk.NewToolCallEvent(tc)
+			// Also send a tool result event to simulate completed tool execution
+			events <- sdk.NewToolResultEvent(tc, "Mock tool result", nil)
 		}
 
 		// Signal completion
@@ -458,7 +460,6 @@ func TestPromiseDetection(t *testing.T) {
 		})
 	}
 }
-
 
 // TestLoopEngine_StateTransitions tests state machine transitions.
 func TestLoopEngine_StateTransitions(t *testing.T) {
