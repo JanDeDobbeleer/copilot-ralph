@@ -320,11 +320,11 @@ func validateSettings() error {
 func printDryRun(cfg *core.LoopConfig) error {
 	fmt.Println(styles.TitleStyle.Render("🔍 Dry Run - Configuration Preview"))
 	fmt.Println()
-	fmt.Println(styles.InfoStyle.Render("  Prompt:          ") + cfg.Prompt)
-	fmt.Println(styles.InfoStyle.Render("  Model:           ") + cfg.Model)
-	fmt.Println(styles.InfoStyle.Render("  Max iterations:  ") + fmt.Sprintf("%d", cfg.MaxIterations))
-	fmt.Println(styles.InfoStyle.Render("  Timeout:         ") + cfg.Timeout.String())
-	fmt.Println(styles.InfoStyle.Render("  Promise phrase:  ") + cfg.PromisePhrase)
+	fmt.Println(styles.InfoStyle.Render("  Prompt:            ") + cfg.Prompt)
+	fmt.Println(styles.InfoStyle.Render("  Model:             ") + cfg.Model)
+	fmt.Println(styles.InfoStyle.Render("  Max iterations:    ") + fmt.Sprintf("%d", cfg.MaxIterations))
+	fmt.Println(styles.InfoStyle.Render("  Timeout:           ") + cfg.Timeout.String())
+	fmt.Println(styles.InfoStyle.Render("  Promise phrase:    ") + cfg.PromisePhrase)
 	fmt.Println(styles.InfoStyle.Render("  Working directory: ") + cfg.WorkingDir)
 	fmt.Println()
 	return nil
@@ -337,13 +337,12 @@ func printLoopConfig(cfg *core.LoopConfig) {
 	fmt.Println(ralphStyle.Render(styles.RalphWiggum))
 	fmt.Println()
 
-	fmt.Println(styles.TitleStyle.Render("🚀 Starting Ralph Loop"))
-	fmt.Println()
-	fmt.Println(styles.WarningStyle.Render("  Prompt:\t") + cfg.Prompt)
-	fmt.Println(styles.WarningStyle.Render("  Model:\t") + cfg.Model)
-	fmt.Println(styles.WarningStyle.Render("  Max iterations:\t") + fmt.Sprintf("%d", cfg.MaxIterations))
-	fmt.Println(styles.WarningStyle.Render("  Timeout:\t") + cfg.Timeout.String())
-	fmt.Println(styles.WarningStyle.Render("  Working dir:\t") + cfg.WorkingDir)
+	fmt.Println(styles.TitleStyle.Render("▶  Starting Ralph Loop"))
+	fmt.Println(styles.WarningStyle.Render("Prompt:         ") + cfg.Prompt)
+	fmt.Println(styles.WarningStyle.Render("Model:          ") + cfg.Model)
+	fmt.Println(styles.WarningStyle.Render("Max iterations: ") + fmt.Sprintf("%d", cfg.MaxIterations))
+	fmt.Println(styles.WarningStyle.Render("Timeout:        ") + cfg.Timeout.String())
+	fmt.Println(styles.WarningStyle.Render("Working dir:    ") + cfg.WorkingDir)
 	fmt.Println()
 }
 
@@ -448,13 +447,12 @@ func printSummary(result *core.LoopResult, startTime time.Time) {
 		status = result.State.String()
 	}
 
-	fmt.Println(styles.InfoStyle.Render("  Status:      ") + status)
-	fmt.Println(styles.InfoStyle.Render("  Iterations:  ") + fmt.Sprintf("%d", result.Iterations))
-	fmt.Println(styles.InfoStyle.Render("  Duration:    ") + duration.Round(time.Second).String())
+	fmt.Println(styles.InfoStyle.Render("Status:     ") + status)
+	fmt.Println(styles.InfoStyle.Render("Iterations: ") + fmt.Sprintf("%d", result.Iterations))
+	fmt.Println(styles.InfoStyle.Render("Duration:   ") + duration.Round(time.Second).String())
 
 	if result.Error != nil {
-		fmt.Println()
-		fmt.Println(styles.ErrorStyle.Render("  Error: ") + result.Error.Error())
+		fmt.Println(styles.ErrorStyle.Render("Error:      ") + result.Error.Error())
 	}
 
 	fmt.Println()
