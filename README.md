@@ -31,7 +31,11 @@
 
 Iterative AI Development Loop Tool
 
-> Ralph implements the "Ralph Wiggum" technique for self-referential AI development loops using GitHub Copilot. It continuously feeds prompts to AI, monitoring for completion signals, with each iteration building on previous work until the task is done.
+Ralph implements the "Ralph Wiggum" technique for self-referential AI development loops using GitHub Copilot. It continuously feeds prompts to AI, monitoring for completion signals, with each iteration building on previous work until the task is done.
+
+> [!IMPORTANT]
+> While ralph works, he's highly experimental. I built this primarily to understand how to embed the Copilot CLI SDK. Feel free to use it,
+> or as inspiration on how to integrate with the Copilot CLI SDK.
 
 ## Features
 

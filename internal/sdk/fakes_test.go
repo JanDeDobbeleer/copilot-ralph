@@ -125,7 +125,7 @@ func TestHandleSDKEventVariousTypes(t *testing.T) {
 
 	// Drain events and assert some expected types
 	received := []Event{}
-	down := time.After(200 * time.Millisecond)
+	down := time.After(testEventDrainTimeout)
 loop:
 	for {
 		select {
@@ -176,7 +176,7 @@ func TestSendPromptOnceWithFakeSession(t *testing.T) {
 	c.sendPromptWithRetry(ctx, nil, "hello", events)
 	// no error expected; function returns after cancellation
 	// drain any events with a short timeout to avoid indefinite blocking
-	done := time.After(100 * time.Millisecond)
+	done := time.After(testEventDrainTimeout)
 drainLoop:
 	for {
 		select {
