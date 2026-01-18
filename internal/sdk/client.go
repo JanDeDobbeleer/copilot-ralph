@@ -72,7 +72,6 @@ type CopilotClient struct {
 	systemMessageMode string
 	systemMessage     string
 	timeout           time.Duration
-	mu                sync.RWMutex
 	streaming         bool
 	started           bool
 }
@@ -174,16 +173,8 @@ func NewCopilotClient(opts ...ClientOption) (*CopilotClient, error) {
 	}, nil
 }
 
-// Start starts the client and prepares it for session creation.
-// This must be called before creating sessions.
-func (c *CopilotClient) Start() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.startLocked()
-}
-
 // startLocked starts the client (must be called with lock held).
-func (c *CopilotClient) startLocked() error {
+func (c *CopilotClient) Start() error {
 	if c.started {
 		return nil
 	}
@@ -205,9 +196,6 @@ func (c *CopilotClient) startLocked() error {
 
 // Stop stops the client and releases resources.
 func (c *CopilotClient) Stop() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if !c.started {
 		return nil
 	}
@@ -231,9 +219,6 @@ func (c *CopilotClient) Stop() error {
 // CreateSession creates a new Copilot session.
 // It initializes the SDK session resources and registers them with the client.
 func (c *CopilotClient) CreateSession(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.sdkClient == nil {
 		return fmt.Errorf("SDK client not initialized")
 	}
@@ -265,9 +250,6 @@ func (c *CopilotClient) CreateSession(ctx context.Context) error {
 
 // DestroySession destroys the current session and cleans up resources.
 func (c *CopilotClient) DestroySession(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.sdkSession == nil {
 		return nil
 	}
@@ -279,8 +261,6 @@ func (c *CopilotClient) DestroySession(ctx context.Context) error {
 
 // Model returns the configured model name.
 func (c *CopilotClient) Model() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.model
 }
 
@@ -289,15 +269,11 @@ func (c *CopilotClient) Model() string {
 // An error is returned if there is no active session.
 // This method includes automatic retry logic for transient errors.
 func (c *CopilotClient) SendPrompt(ctx context.Context, prompt string) (<-chan Event, error) {
-	c.mu.Lock()
 	if c.sdkSession == nil {
-		c.mu.Unlock()
 		return nil, fmt.Errorf("no active session")
 	}
 
 	sdkSession := c.sdkSession
-	c.mu.Unlock()
-
 	// Create event channel with buffer
 	events := make(chan Event, 100)
 
