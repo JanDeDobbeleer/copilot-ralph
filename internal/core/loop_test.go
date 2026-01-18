@@ -5,6 +5,7 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -209,7 +210,7 @@ func (m *MockSDKClient) SendPrompt(ctx context.Context, prompt string) (<-chan s
 
 		// If simulating promise, include it in response
 		if m.SimulatePromise && m.PromisePhrase != "" {
-			responseText = responseText + " " + m.PromisePhrase
+			responseText = fmt.Sprintf("%s <promise>%s</promise>", responseText, m.PromisePhrase)
 		}
 
 		events <- sdk.NewTextEvent(responseText)
@@ -363,25 +364,19 @@ func TestPromiseDetection(t *testing.T) {
 	}{
 		{
 			name:     "exact match",
-			text:     "I'm done!",
+			text:     "<promise>I'm done!</promise>",
 			promise:  "I'm done!",
 			expected: true,
 		},
 		{
 			name:     "case insensitive match",
-			text:     "IM DONE!",
+			text:     "<promise>IM DONE!</promise>",
 			promise:  "I'm done!",
-			expected: true,
-		},
-		{
-			name:     "mixed case match",
-			text:     "Im DoNe!",
-			promise:  "i'm done!",
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "embedded in text",
-			text:     "The task is complete and I'm done!",
+			text:     "The task is complete and <promise>I'm done!</promise>",
 			promise:  "I'm done!",
 			expected: true,
 		},
@@ -398,20 +393,14 @@ func TestPromiseDetection(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "without punctuation",
-			text:     "Im done",
-			promise:  "I'm done!",
-			expected: true,
-		},
-		{
 			name:     "task complete phrase",
-			text:     "Task complete",
+			text:     "<promise>Task complete</promise>",
 			promise:  "Task complete",
 			expected: true,
 		},
 		{
 			name:     "task complete with extra text",
-			text:     "All work finished. Task complete.",
+			text:     "All work finished. <promise>task complete</promise>",
 			promise:  "task complete",
 			expected: true,
 		},
@@ -435,19 +424,19 @@ func TestPromiseDetection(t *testing.T) {
 		},
 		{
 			name:     "promise with extra whitespace",
-			text:     "Im   done",
+			text:     "<promise>Im   done</promise>",
 			promise:  "I'm done!",
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "finished phrase",
-			text:     "The task is finished.",
+			text:     "The task is <promise>finished</promise>.",
 			promise:  "finished",
 			expected: true,
 		},
 		{
 			name:     "multiline text",
-			text:     "Line 1\nLine 2\nI'm done!\nLine 4",
+			text:     "Line 1\nLine 2\n<promise>I'm done!</promise>\nLine 4",
 			promise:  "I'm done!",
 			expected: true,
 		},

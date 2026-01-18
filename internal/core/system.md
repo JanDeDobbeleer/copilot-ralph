@@ -11,7 +11,7 @@ Please work on the task. When you try to exit, the Ralph loop will feed the SAME
 When the task is completely finished:
 
 1. **First**, create a summary of all changes.
-2. **Then**, as the VERY LAST text you output, say this exact phrase: "{{.Promise}}".
+2. **Then**, as the VERY LAST text you output, say this exact phrase: "<promise>{{.Promise}}</promise>".
 
 The completion signal MUST be the final text in your response. Do not add any text, explanation, or formatting after the completion phrase.
 
