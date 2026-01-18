@@ -35,7 +35,7 @@ func TestToolOutputPromiseAndFileChange(t *testing.T) {
 // Test that tool result containing promise triggers a PromiseDetectedEvent emission (via events channel)
 func TestToolResultTriggersPromiseDetectedEvent(t *testing.T) {
 	mock := NewMockSDKClient()
-	mock.ToolCalls = []sdk.ToolCall{{ID: "1", Name: "run", Parameters: map[string]interface{}{} }}
+	mock.ToolCalls = []sdk.ToolCall{{ID: "1", Name: "run", Parameters: map[string]interface{}{}}}
 	mock.ResponseText = "result"
 	mock.SimulatePromise = true
 	mock.PromisePhrase = "DONE"

@@ -109,7 +109,7 @@ func TestNewCopilotClient(t *testing.T) {
 }
 
 func TestCopilotClientStartStop(t *testing.T) {
-	
+
 	t.Run("start and stop", func(t *testing.T) {
 		skipIfNoSDK(t)
 		client, err := NewCopilotClient()
@@ -189,7 +189,7 @@ func TestCopilotClientCreateSession(t *testing.T) {
 }
 
 func TestCopilotClientDestroySession(t *testing.T) {
-		// Integration-only tests: skip if copilot CLI unavailable
+	// Integration-only tests: skip if copilot CLI unavailable
 	t.Run("destroy session", func(t *testing.T) {
 		skipIfNoSDK(t)
 		client, err := NewCopilotClient()
@@ -219,7 +219,7 @@ func TestCopilotClientDestroySession(t *testing.T) {
 }
 
 func TestCopilotClientSendPrompt(t *testing.T) {
-	
+
 }
 
 func TestCopilotClientConcurrency(t *testing.T) {

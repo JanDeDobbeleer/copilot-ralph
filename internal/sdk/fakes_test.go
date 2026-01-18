@@ -77,6 +77,12 @@ func (f *fakeSession) Destroy() error { return nil }
 
 func ptrString(s string) *string { return &s }
 
+// testEventDrainTimeout is used by tests that need to drain the events channel
+// without relying on the producer to close it. We use a short timeout to avoid
+// indefinite blocking in tests where the code under test may return early
+// (for example, when a context is canceled).
+const testEventDrainTimeout = 100 * time.Millisecond
+
 func TestSafeEventSenderOnClosedChannel(t *testing.T) {
 	ch := make(chan Event)
 	close(ch)
@@ -169,12 +175,24 @@ func TestSendPromptOnceWithFakeSession(t *testing.T) {
 	cancel()
 	c.sendPromptWithRetry(ctx, nil, "hello", events)
 	// no error expected; function returns after cancellation
-	// drain any events
-	for range events {
+	// drain any events with a short timeout to avoid indefinite blocking
+	done := time.After(100 * time.Millisecond)
+drainLoop:
+	for {
+		select {
+		case _, ok := <-events:
+			if !ok {
+				break drainLoop
+			}
+			// continue draining
+		case <-done:
+			// timeout reached; stop draining
+			break drainLoop
+		}
 	}
 
 	// We canceled the context before send, so no history changes expected; just ensure function returned cleanly.
-	// Nothing to assert about session history in this canceled path.
+	require.Len(t, c.session.History, 0)
 }
 
 // testSessionAdapter adapts fakeSession to the concrete type expected by client.sendPromptOnce signature

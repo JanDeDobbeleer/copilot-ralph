@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -46,6 +47,9 @@ Examples:
   # Direct prompt (required)
   ralph run "Add unit tests for the parser module"
 
+  # Using a Markdown file as prompt
+  ralph run task_description.md
+
   # With options
   ralph run --max-iterations 5 --timeout 10m "Refactor authentication"
 
@@ -62,7 +66,6 @@ Examples:
 }
 
 var (
-	runPrompt            string
 	runMaxIterations     int
 	runTimeout           time.Duration
 	runPromise           string
@@ -76,7 +79,6 @@ var (
 )
 
 func init() {
-	runCmd.Flags().StringVarP(&runPrompt, "prompt", "p", "", "task prompt (alternative to argument)")
 	runCmd.Flags().IntVarP(&runMaxIterations, "max-iterations", "m", 10, "maximum loop iterations")
 	runCmd.Flags().DurationVarP(&runTimeout, "timeout", "t", 30*time.Minute, "maximum loop runtime")
 	runCmd.Flags().StringVar(&runPromise, "promise", "I'm special!", "completion promise phrase")
@@ -99,7 +101,7 @@ func runLoop(cmd *cobra.Command, args []string) error {
 
 	// Require prompt
 	if prompt == "" {
-		return errors.New("prompt is required (provide as argument, --prompt flag, or via stdin)")
+		return errors.New("prompt is required (provide as argument or via stdin)")
 	}
 
 	// Build loop configuration from flags
@@ -231,18 +233,34 @@ func runLoop(cmd *cobra.Command, args []string) error {
 }
 
 // resolvePrompt determines the prompt from various sources.
+// Supports:
+//   - Positional argument (direct text prompt)
+//   - Positional argument as a path to a Markdown file (.md/.markdown)
+//   - Stdin (if piped)
 func resolvePrompt(args []string) (string, error) {
 	// Priority 1: Positional argument
 	if len(args) > 0 {
-		return args[0], nil
+		first := args[0]
+		// If it's a file, validate and read it
+		if info, err := os.Stat(first); err == nil && !info.IsDir() {
+			ext := strings.ToLower(filepath.Ext(first))
+			if ext != ".md" && ext != ".markdown" {
+				return "", fmt.Errorf("file %q must be a Markdown file with extension .md or .markdown", first)
+			}
+
+			data, err := os.ReadFile(first)
+			if err != nil {
+				return "", fmt.Errorf("failed to read prompt file %q: %w", first, err)
+			}
+
+			return string(data), nil
+		}
+
+		// Not a file - treat as direct prompt
+		return first, nil
 	}
 
-	// Priority 2: --prompt flag
-	if runPrompt != "" {
-		return runPrompt, nil
-	}
-
-	// Priority 3: Stdin (if piped)
+	// Priority 2: Stdin (if piped)
 	stat, _ := os.Stdin.Stat()
 	if (stat.Mode() & os.ModeCharDevice) == 0 {
 		// Data is being piped

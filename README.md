@@ -38,9 +38,8 @@ Iterative AI Development Loop Tool
 ✨ **Iterative AI Loops** - Run multiple AI iterations until task completion
 ⚙️ **Flexible Configuration** - Configure loops via command-line flags
 🤖 **GitHub Copilot Integration** - Powered by GitHub Copilot SDK
-🔄 **Promise Detection** - Automatic completion signal recognition
-📊 **Real-time Event Streaming** - Watch iteration progress and tool execution
-🛠️ **Tool Execution** - AI can read files, run commands, and make changes
+ **Real-time Event Streaming** - Watch iteration progress and tool execution🛠️ **Tool Execution** - AI can read files, run commands, and make changes
+⏱️ **Timeout Controls** - Prevent runaway loops with safety limits🛠️ **Tool Execution** - AI can read files, run commands, and make changes
 ⏱️ **Timeout Controls** - Prevent runaway loops with safety limits
 
 ## Quick Start
@@ -63,6 +62,9 @@ make build
 # Run an AI development loop
 ralph run "Add unit tests for the parser module"
 
+# Use a Markdown file as the prompt
+ralph run task_description.md
+
 # With options
 ralph run --max-iterations 5 --timeout 10m "Refactor authentication"
 
@@ -76,17 +78,15 @@ ralph run \
 
 ## How It Works
 
-1. **Initialize** - Ralph parses your prompt and configuration (max iterations, timeout, promise phrase)
+1. **Initialize** - Ralph parses your prompt and configuration (max iterations, timeout)
 2. **Setup** - Create SDK client and loop engine with system prompt
 3. **Listen** - Start event listener to display progress in real-time
 4. **Loop** - For each iteration:
    - Send prompt to Copilot AI
    - Stream AI response to stdout
    - Execute any tools the AI invokes (read files, run commands, etc.)
-   - Check if AI output contains the promise phrase
 5. **Complete** - Loop exits when:
-   - Promise phrase detected ✓ Success
-   - Max iterations reached ✗ Max iterations
+   - Max iterations reached ✓ Complete
    - Timeout exceeded ✗ Timeout
    - Error occurs ✗ Failed
    - User cancels (Ctrl+C) ✗ Cancelled
@@ -110,11 +110,10 @@ ralph run \
 │  (Display)       │      │  (file ops,etc)│
 └──────┬───────────┘      └────────────────┘
        │                           │
-       │    Promise Detected?      │
        └───────────────────────────┘
-              │ Yes
+              │
               v
-         🎉 Complete
+         ✓ Complete (or timeout/error)
 ```
 
 ## Commands
@@ -127,11 +126,13 @@ Run an AI development loop.
 # Direct prompt
 ralph run "Add comprehensive error handling"
 
+# Using a Markdown file as prompt
+ralph run task_description.md
+
 # With flags
 ralph run \
   --max-iterations 20 \
   --timeout 1h \
-  --promise "Task complete" \
   --model gpt-4-turbo \
   --log-level debug \
   "Implement user authentication"

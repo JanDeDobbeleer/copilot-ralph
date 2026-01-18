@@ -18,61 +18,40 @@ import (
 )
 
 func TestResolvePrompt(t *testing.T) {
-	tests := []struct {
-		name        string
-		args        []string
-		promptFlag  string
-		expected    string
-		expectError bool
-	}{
-		{
-			name:        "from positional argument",
-			args:        []string{"test prompt"},
-			promptFlag:  "",
-			expected:    "test prompt",
-			expectError: false,
-		},
-		{
-			name:        "from prompt flag when no args",
-			args:        []string{},
-			promptFlag:  "flag prompt",
-			expected:    "flag prompt",
-			expectError: false,
-		},
-		{
-			name:        "positional takes precedence over flag",
-			args:        []string{"arg prompt"},
-			promptFlag:  "flag prompt",
-			expected:    "arg prompt",
-			expectError: false,
-		},
-		{
-			name:        "empty when no input",
-			args:        []string{},
-			promptFlag:  "",
-			expected:    "",
-			expectError: true,
-		},
-	}
+	t.Run("from positional argument", func(t *testing.T) {
+		result, err := resolvePrompt([]string{"test prompt"})
+		require.NoError(t, err)
+		assert.Equal(t, "test prompt", result)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Set the flag value
-			oldPrompt := runPrompt
-			runPrompt = tt.promptFlag
-			defer func() { runPrompt = oldPrompt }()
+	t.Run("from markdown file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "task.md")
+		content := "# Task\nPlease implement X"
+		require.NoError(t, os.WriteFile(path, []byte(content), 0644))
 
-			result, err := resolvePrompt(tt.args)
+		result, err := resolvePrompt([]string{path})
+		require.NoError(t, err)
+		assert.Equal(t, content, result)
+	})
 
-			if tt.expectError {
-				assert.Error(t, err)
-				return
-			}
+	t.Run("from stdin when piped", func(t *testing.T) {
+		oldStdin := os.Stdin
+		r, w, _ := os.Pipe()
+		_, _ = w.WriteString("stdin prompt\n")
+		w.Close()
+		os.Stdin = r
+		defer func() { os.Stdin = oldStdin }()
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+		result, err := resolvePrompt([]string{})
+		require.NoError(t, err)
+		assert.Equal(t, "stdin prompt", result)
+	})
+
+	t.Run("empty when no input", func(t *testing.T) {
+		_, err := resolvePrompt([]string{})
+		require.Error(t, err)
+	})
 }
 
 func TestValidateRunConfig(t *testing.T) {
