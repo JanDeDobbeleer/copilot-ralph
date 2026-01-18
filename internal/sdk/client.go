@@ -273,14 +273,13 @@ func (c *CopilotClient) SendPrompt(ctx context.Context, prompt string) (<-chan E
 		return nil, fmt.Errorf("no active session")
 	}
 
-	sdkSession := c.sdkSession
 	// Create event channel with buffer
 	events := make(chan Event, 100)
 
 	// Process prompt asynchronously with retry logic
 	go func() {
 		defer close(events)
-		c.sendPromptWithRetry(ctx, sdkSession, prompt, events)
+		c.sendPromptWithRetry(ctx, prompt, events)
 	}()
 
 	return events, nil
@@ -301,7 +300,7 @@ func safeEventSender(events chan<- Event, event Event) (err error) {
 }
 
 // sendPromptWithRetry sends the prompt with automatic retry for transient errors.
-func (c *CopilotClient) sendPromptWithRetry(ctx context.Context, sdkSession *copilot.Session, prompt string, events chan<- Event) {
+func (c *CopilotClient) sendPromptWithRetry(ctx context.Context, prompt string, events chan<- Event) {
 	var lastErr error
 
 	for attempt := 0; attempt <= len(retryBackoffs); attempt++ {
@@ -326,7 +325,7 @@ func (c *CopilotClient) sendPromptWithRetry(ctx context.Context, sdkSession *cop
 		}
 
 		// Attempt to send the prompt
-		err := c.sendPromptOnce(ctx, sdkSession, prompt, events)
+		err := c.sendPromptOnce(ctx, prompt, events)
 		if err == nil {
 			// Success
 			return
@@ -348,7 +347,7 @@ func (c *CopilotClient) sendPromptWithRetry(ctx context.Context, sdkSession *cop
 }
 
 // sendPromptOnce sends the prompt once without retrying.
-func (c *CopilotClient) sendPromptOnce(ctx context.Context, sdkSession *copilot.Session, prompt string, events chan<- Event) error {
+func (c *CopilotClient) sendPromptOnce(ctx context.Context, prompt string, events chan<- Event) error {
 	// Set up done channel to wait for session.idle
 	done := make(chan struct{})
 	doneOnce := &sync.Once{}
@@ -357,12 +356,13 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, sdkSession *copilot.
 			close(done)
 		})
 	}
+
 	var responseContent string
 	var sessionErr error
 	pendingToolCalls := make(map[string]ToolCall)
 
 	// Subscribe to SDK session events
-	unsubscribe := sdkSession.On(func(event copilot.SessionEvent) {
+	unsubscribe := c.sdkSession.On(func(event copilot.SessionEvent) {
 		// Check if context is cancelled before processing events
 		select {
 		case <-ctx.Done():
@@ -375,12 +375,14 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, sdkSession *copilot.
 		if event.Type == "session.error" && event.Data.Message != nil {
 			sessionErr = fmt.Errorf("SDK error: %s", *event.Data.Message)
 		}
+
 		c.handleSDKEvent(event, events, &responseContent, closeDone, pendingToolCalls)
 	})
+
 	defer unsubscribe()
 
 	// Send the message
-	_, err := sdkSession.Send(copilot.MessageOptions{
+	_, err := c.sdkSession.Send(copilot.MessageOptions{
 		Prompt: prompt,
 	})
 	if err != nil {
@@ -392,8 +394,9 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, sdkSession *copilot.
 	case <-ctx.Done():
 		// Abort the session and close done to unblock any waiting
 		go func() {
-			_ = sdkSession.Abort()
+			_ = c.sdkSession.Abort()
 		}()
+
 		closeDone()
 		return ctx.Err()
 	case <-done:

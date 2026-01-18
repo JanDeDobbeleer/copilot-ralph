@@ -169,7 +169,7 @@ func TestSendPromptOnceWithFakeSession(t *testing.T) {
 	// call sendPromptWithRetry with a canceled context to cover the cancellation early-return path
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	c.sendPromptWithRetry(ctx, nil, "hello", events)
+	c.sendPromptWithRetry(ctx, "hello", events)
 	// no error expected; function returns after cancellation
 	// drain any events with a short timeout to avoid indefinite blocking
 	done := time.After(testEventDrainTimeout)
