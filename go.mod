@@ -1,11 +1,10 @@
 module github.com/JanDeDobbeleer/copilot-ralph
 
-go 1.23.0
+go 1.25.5
 
 require (
 	github.com/charmbracelet/lipgloss v1.0.0
 	github.com/github/copilot-sdk/go v0.0.0-20260115160841-b8a836b2c6a3
-	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.11.1
 )

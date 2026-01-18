@@ -104,25 +104,19 @@ func TestBuildSystemPromptTemplateStructure(t *testing.T) {
 
 // MockSDKClient is a mock implementation of SDKClient for testing.
 type MockSDKClient struct {
-	mu sync.Mutex
-
-	// Configuration
-	model      string
-	started    bool
-	hasSession bool
-
-	// Mock behavior
-	StartError          error
 	StopError           error
-	CreateSessionError  error
-	DestroySessionError error
 	SendPromptError     error
-
-	// Response simulation
-	ResponseText    string
-	ToolCalls       []sdk.ToolCall
-	SimulatePromise bool
-	PromisePhrase   string
+	DestroySessionError error
+	CreateSessionError  error
+	StartError          error
+	ResponseText        string
+	model               string
+	PromisePhrase       string
+	ToolCalls           []sdk.ToolCall
+	mu                  sync.Mutex
+	hasSession          bool
+	started             bool
+	SimulatePromise     bool
 }
 
 // NewMockSDKClient creates a new mock SDK client.
@@ -157,15 +151,15 @@ func (m *MockSDKClient) Stop() error {
 }
 
 // CreateSession implements SDKClient.
-func (m *MockSDKClient) CreateSession(ctx context.Context) (*sdk.Session, error) {
+func (m *MockSDKClient) CreateSession(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.CreateSessionError != nil {
-		return nil, m.CreateSessionError
+		return m.CreateSessionError
 	}
 	m.hasSession = true
-	return sdk.NewSession(), nil
+	return nil
 }
 
 // DestroySession implements SDKClient.
@@ -701,7 +695,7 @@ func TestLoopEventTypes(t *testing.T) {
 	})
 
 	t.Run("ToolExecutionEvent", func(t *testing.T) {
-		params := map[string]interface{}{"key": "value"}
+		params := map[string]any{"key": "value"}
 		event := NewToolExecutionEvent("read_file", params, "content", nil, time.Millisecond, 2)
 
 		assert.Equal(t, "read_file", event.ToolName)

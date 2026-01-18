@@ -44,21 +44,13 @@ func (s LoopState) String() string {
 
 // LoopConfig contains configuration for loop execution.
 type LoopConfig struct {
-	// Prompt is the task prompt to send to the AI.
-	Prompt string
-	// MaxIterations is the maximum number of iterations before stopping.
-	// 0 means no limit.
-	MaxIterations int
-	// Timeout is the maximum loop runtime. 0 means no timeout.
-	Timeout time.Duration
-	// PromisePhrase signals completion when AI says this phrase.
+	Prompt        string
 	PromisePhrase string
-	// Model is the AI model to use.
-	Model string
-	// WorkingDir is the working directory for loop execution.
-	WorkingDir string
-	// DryRun shows what would happen without executing.
-	DryRun bool
+	Model         string
+	WorkingDir    string
+	MaxIterations int
+	Timeout       time.Duration
+	DryRun        bool
 }
 
 // DefaultLoopConfig returns a LoopConfig with default values.
@@ -76,25 +68,16 @@ func DefaultLoopConfig() *LoopConfig {
 // It coordinates with the Copilot SDK, detects completion promises,
 // and handles state transitions.
 type LoopEngine struct {
-	// Configuration
-	config *LoopConfig
-	sdk    SDKClient
-
-	// State
-	state     LoopState
-	iteration int
-	startTime time.Time
-
-	// Events channel for subscribers
+	startTime    time.Time
+	sdk          SDKClient
+	ctx          context.Context
+	config       *LoopConfig
 	events       chan any
+	cancel       context.CancelFunc
+	state        LoopState
+	iteration    int
+	mu           sync.RWMutex
 	eventsClosed bool
-
-	// Context and cancellation
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	// Synchronization
-	mu sync.RWMutex
 }
 
 // eventChannelBufferSize is the buffer size for the events channel.
@@ -152,12 +135,8 @@ func (e *LoopEngine) Events() <-chan any {
 
 // LoopResult contains the outcome of loop execution.
 type LoopResult struct {
-	// State is the final loop state.
-	State LoopState
-	// Iterations is the number of iterations completed.
+	Error      error
+	State      LoopState
 	Iterations int
-	// Duration is the total loop runtime.
-	Duration time.Duration
-	// Error contains any error that occurred.
-	Error error
+	Duration   time.Duration
 }

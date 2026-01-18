@@ -63,7 +63,7 @@ func (e *LoopEngine) Start(ctx context.Context) (*LoopResult, error) {
 			return e.fail(fmt.Errorf("failed to start SDK: %w", err))
 		}
 
-		_, err := e.sdk.CreateSession(e.ctx)
+		err := e.sdk.CreateSession(e.ctx)
 		if err != nil {
 			return e.fail(fmt.Errorf("failed to create SDK session: %w", err))
 		}

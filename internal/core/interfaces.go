@@ -16,7 +16,8 @@ type SDKClient interface {
 	// Stop closes the SDK client and releases resources.
 	Stop() error
 	// CreateSession creates a new SDK session.
-	CreateSession(ctx context.Context) (*sdk.Session, error)
+	// The implementation should initialize any SDK session resources and return an error if it fails.
+	CreateSession(ctx context.Context) error
 	// DestroySession destroys the current session.
 	DestroySession(ctx context.Context) error
 	// SendPrompt sends a prompt to the AI and returns an event stream.

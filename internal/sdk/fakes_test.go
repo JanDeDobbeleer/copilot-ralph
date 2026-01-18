@@ -14,10 +14,9 @@ import (
 
 // fakeSession implements the minimal subset of copilot.Session used by client.go
 type fakeSession struct {
-	mu       sync.Mutex
-	handlers []func(generated.SessionEvent)
-	// control what Send does
 	sendFunc func()
+	handlers []func(generated.SessionEvent)
+	mu       sync.Mutex
 }
 
 func (f *fakeSession) On(h func(generated.SessionEvent)) func() {
@@ -33,7 +32,7 @@ func (f *fakeSession) On(h func(generated.SessionEvent)) func() {
 	}
 }
 
-func (f *fakeSession) Send(opts interface{}) (string, error) {
+func (f *fakeSession) Send(opts any) (string, error) {
 	// Simulate asynchronous events being emitted
 	go func() {
 		f.mu.Lock()
@@ -106,7 +105,7 @@ func TestHandleSDKEventVariousTypes(t *testing.T) {
 	c.handleSDKEvent(generated.SessionEvent{Type: "assistant.message", Data: generated.Data{Content: ptrString("full")}}, events, new(string), closeDone, pending)
 
 	// tool.execution_start
-	c.handleSDKEvent(generated.SessionEvent{Type: "tool.execution_start", Data: generated.Data{ToolName: ptrString("edit"), ToolCallID: ptrString("1"), Arguments: map[string]interface{}{"path": "a.go"}}}, events, new(string), closeDone, pending)
+	c.handleSDKEvent(generated.SessionEvent{Type: "tool.execution_start", Data: generated.Data{ToolName: ptrString("edit"), ToolCallID: ptrString("1"), Arguments: map[string]any{"path": "a.go"}}}, events, new(string), closeDone, pending)
 
 	// tool.execution_complete success
 	// adapt to copilot.ToolResult fields
@@ -164,9 +163,6 @@ func TestSendPromptOnceWithFakeSession(t *testing.T) {
 	c, err := NewCopilotClient()
 	require.NoError(t, err)
 
-	// ensure client has a session wrapper to record history
-	c.session = NewSession()
-
 	events := make(chan Event, 10)
 	defer close(events)
 
@@ -190,9 +186,6 @@ drainLoop:
 			break drainLoop
 		}
 	}
-
-	// We canceled the context before send, so no history changes expected; just ensure function returned cleanly.
-	require.Len(t, c.session.History, 0)
 }
 
 // testSessionAdapter adapts fakeSession to the concrete type expected by client.sendPromptOnce signature

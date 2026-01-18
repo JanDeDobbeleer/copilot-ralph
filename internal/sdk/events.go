@@ -33,9 +33,8 @@ type Event interface {
 
 // TextEvent represents a text/streaming content event.
 type TextEvent struct {
-	// Text contains the text content from the assistant.
-	Text      string
 	timestamp time.Time
+	Text      string
 }
 
 // Type returns EventTypeText.
@@ -83,13 +82,10 @@ func NewToolCallEvent(toolCall ToolCall) *ToolCallEvent {
 
 // ToolResultEvent represents the result of a tool execution.
 type ToolResultEvent struct {
-	// ToolCall contains the original tool call.
-	ToolCall ToolCall
-	// Result contains the tool execution result.
-	Result string
-	// Error contains any error that occurred during execution.
-	Error     error
+	ToolCall  ToolCall
 	timestamp time.Time
+	Error     error
+	Result    string
 }
 
 // Type returns EventTypeToolResult.

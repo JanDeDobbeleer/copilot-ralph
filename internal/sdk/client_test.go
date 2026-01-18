@@ -36,10 +36,10 @@ func skipIfNoSDK(t *testing.T) {
 func TestNewCopilotClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		opts        []ClientOption
 		wantModel   string
-		wantErr     bool
 		errContains string
+		opts        []ClientOption
+		wantErr     bool
 	}{
 		{
 			name:      "default options",
@@ -141,16 +141,11 @@ func TestCopilotClientCreateSession(t *testing.T) {
 
 		// If SDK is not available, CreateSession will return an error "SDK client not initialized" when the client wasn't started.
 		// This expectation ensures tests behave correctly when SDK is absent.
-		session, err := client.CreateSession(context.Background())
+		err = client.CreateSession(context.Background())
 		if err != nil {
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
 		}
-		require.NotNil(t, session)
-
-		assert.NotEmpty(t, session.ID)
-		assert.WithinDuration(t, time.Now(), session.CreatedAt, time.Second)
-		assert.Empty(t, session.History)
 	})
 
 	t.Run("create session starts client automatically", func(t *testing.T) {
@@ -163,7 +158,7 @@ func TestCopilotClientCreateSession(t *testing.T) {
 		err = client.Start()
 		require.NoError(t, err)
 
-		_, err = client.CreateSession(context.Background())
+		err = client.CreateSession(context.Background())
 		require.NoError(t, err)
 	})
 
@@ -175,16 +170,11 @@ func TestCopilotClientCreateSession(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		session, err := client.CreateSession(context.Background())
+		err = client.CreateSession(context.Background())
 		if err != nil {
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
 		}
-
-		// System message is added to history as user message
-		require.Len(t, session.History, 1)
-		assert.Equal(t, RoleUser, session.History[0].Role)
-		assert.Equal(t, "You are Ralph", session.History[0].Content)
 	})
 }
 
@@ -196,7 +186,7 @@ func TestCopilotClientDestroySession(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		_, err = client.CreateSession(context.Background())
+		err = client.CreateSession(context.Background())
 		if err != nil {
 			// SDK may be missing; accept the known error message
 			assert.Contains(t, err.Error(), "SDK client not initialized")
@@ -230,7 +220,7 @@ func TestCopilotClientConcurrency(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		session, err := client.CreateSession(context.Background())
+		err = client.CreateSession(context.Background())
 		if err != nil {
 			if err.Error() == "SDK client not initialized" {
 				// SDK missing, accept this outcome
@@ -240,57 +230,17 @@ func TestCopilotClientConcurrency(t *testing.T) {
 		}
 
 		var wg sync.WaitGroup
-		errChan := make(chan error, 10)
 
-		// Multiple goroutines accessing session
-		for i := 0; i < 10; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		// Concurrently access a client property (Model)
+		for range 10 {
+			wg.Go(func() {
 
-				if session == nil {
-					errChan <- errors.New("session is nil")
-					return
-				}
-
-				// Just access session concurrently
-				_ = session.ID
-			}()
+				// Concurrently read a client property
+				_ = client.Model()
+			})
 		}
 
 		wg.Wait()
-		close(errChan)
-
-		for err := range errChan {
-			t.Errorf("Concurrent access error: %v", err)
-		}
-	})
-}
-
-func TestSession(t *testing.T) {
-	t.Run("new session", func(t *testing.T) {
-		session := NewSession()
-		require.NotNil(t, session)
-
-		assert.NotEmpty(t, session.ID)
-		assert.WithinDuration(t, time.Now(), session.CreatedAt, time.Second)
-		assert.Empty(t, session.History)
-	})
-
-	t.Run("add messages", func(t *testing.T) {
-		session := NewSession()
-
-		msg := Message{
-			Role:      RoleUser,
-			Content:   "Hello",
-			Timestamp: time.Now(),
-		}
-
-		session.AddMessage(msg)
-
-		require.Len(t, session.History, 1)
-		assert.Equal(t, RoleUser, session.History[0].Role)
-		assert.Equal(t, "Hello", session.History[0].Content)
 	})
 }
 
@@ -344,8 +294,8 @@ func TestEventTypes(t *testing.T) {
 
 func TestIsRetryableError(t *testing.T) {
 	tests := []struct {
-		name     string
 		err      error
+		name     string
 		expected bool
 	}{
 		{

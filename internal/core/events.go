@@ -112,12 +112,9 @@ func NewAIResponseEvent(text string, iteration int) *AIResponseEvent {
 }
 
 type ToolEvent struct {
-	// ToolName is the name of the tool executed.
-	ToolName string
-	// Parameters are the tool parameters.
-	Parameters map[string]interface{}
-	// Iteration is the current iteration number.
-	Iteration int
+	Parameters map[string]any
+	ToolName   string
+	Iteration  int
 }
 
 // Info returns a formatted string describing the tool execution based on parameters.
@@ -137,18 +134,14 @@ func (e *ToolEvent) Info(emoji string) string {
 
 // ToolExecutionEvent indicates a tool was executed.
 type ToolExecutionEvent struct {
-	ToolEvent
-
-	// Result is the tool execution result.
-	Result string
-	// Error is any error that occurred during execution.
 	Error error
-	// Duration is how long the tool took to execute.
+	ToolEvent
+	Result   string
 	Duration time.Duration
 }
 
 // NewToolExecutionEvent creates a new ToolExecutionEvent.
-func NewToolExecutionEvent(toolName string, params map[string]interface{}, result string, err error, duration time.Duration, iteration int) *ToolExecutionEvent {
+func NewToolExecutionEvent(toolName string, params map[string]any, result string, err error, duration time.Duration, iteration int) *ToolExecutionEvent {
 	return &ToolExecutionEvent{
 		ToolEvent: ToolEvent{
 			ToolName:   toolName,
@@ -167,7 +160,7 @@ type ToolExecutionStartEvent struct {
 }
 
 // NewToolExecutionStartEvent creates a new ToolExecutionStartEvent.
-func NewToolExecutionStartEvent(toolName string, params map[string]interface{}, iteration int) *ToolExecutionStartEvent {
+func NewToolExecutionStartEvent(toolName string, params map[string]any, iteration int) *ToolExecutionStartEvent {
 	return &ToolExecutionStartEvent{
 		ToolEvent: ToolEvent{
 			ToolName:   toolName,

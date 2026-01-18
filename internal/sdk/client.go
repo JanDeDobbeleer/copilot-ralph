@@ -64,25 +64,17 @@ func isRetryableError(err error) bool {
 // CopilotClient wraps the GitHub Copilot SDK.
 // It provides session management, event handling, and tool registration.
 type CopilotClient struct {
-	// Configuration
+	sdkClient         *copilot.Client
+	sdkSession        *copilot.Session
 	model             string
 	logLevel          string
 	workingDir        string
-	streaming         bool
-	systemMessageMode string // "append" or "replace"
+	systemMessageMode string
 	systemMessage     string
 	timeout           time.Duration
-
-	// SDK client and session
-	sdkClient  *copilot.Client
-	sdkSession *copilot.Session
-
-	// State
-	session *Session
-	started bool
-
-	// Synchronization
-	mu sync.RWMutex
+	mu                sync.RWMutex
+	streaming         bool
+	started           bool
 }
 
 // clientConfig holds configuration options for the client.
@@ -90,10 +82,10 @@ type clientConfig struct {
 	model             string
 	logLevel          string
 	workingDir        string
-	streaming         bool
 	systemMessageMode string
 	systemMessage     string
 	timeout           time.Duration
+	streaming         bool
 }
 
 // ClientOption configures the CopilotClient.
@@ -232,8 +224,56 @@ func (c *CopilotClient) Stop() error {
 		c.sdkClient = nil
 	}
 
-	c.session = nil
 	c.started = false
+	return nil
+}
+
+// CreateSession creates a new Copilot session.
+// It initializes the SDK session resources and registers them with the client.
+func (c *CopilotClient) CreateSession(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.sdkClient == nil {
+		return fmt.Errorf("SDK client not initialized")
+	}
+
+	// Build session config for the SDK
+	sessionConfig := &copilot.SessionConfig{
+		Model:     c.model,
+		Streaming: c.streaming,
+	}
+
+	// Configure system message if provided
+	if c.systemMessage != "" {
+		sessionConfig.SystemMessage = &copilot.SystemMessageConfig{
+			Mode:    c.systemMessageMode,
+			Content: c.systemMessage,
+		}
+	}
+
+	// Create SDK session
+	sdkSession, err := c.sdkClient.CreateSession(sessionConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create SDK session: %w", err)
+	}
+
+	// Store SDK session reference; we no longer maintain a local Session wrapper
+	c.sdkSession = sdkSession
+	return nil
+}
+
+// DestroySession destroys the current session and cleans up resources.
+func (c *CopilotClient) DestroySession(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.sdkSession == nil {
+		return nil
+	}
+
+	_ = c.sdkSession.Destroy()
+	c.sdkSession = nil
 	return nil
 }
 
@@ -250,18 +290,11 @@ func (c *CopilotClient) Model() string {
 // This method includes automatic retry logic for transient errors.
 func (c *CopilotClient) SendPrompt(ctx context.Context, prompt string) (<-chan Event, error) {
 	c.mu.Lock()
-	if c.session == nil || c.sdkSession == nil {
+	if c.sdkSession == nil {
 		c.mu.Unlock()
 		return nil, fmt.Errorf("no active session")
 	}
 
-	// Add user message to history
-	userMsg := Message{
-		Role:      RoleUser,
-		Content:   prompt,
-		Timestamp: time.Now(),
-	}
-	c.session.AddMessage(userMsg)
 	sdkSession := c.sdkSession
 	c.mu.Unlock()
 
@@ -394,17 +427,6 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, sdkSession *copilot.
 		}
 	}
 
-	// Add assistant message to history
-	c.mu.Lock()
-	if c.session != nil && responseContent != "" {
-		c.session.AddMessage(Message{
-			Role:      RoleAssistant,
-			Content:   responseContent,
-			Timestamp: time.Now(),
-		})
-	}
-	c.mu.Unlock()
-
 	// Signal completion
 	_ = safeEventSender(events, NewResponseCompleteEvent(Message{
 		Role:      RoleAssistant,
@@ -457,7 +479,7 @@ func (c *CopilotClient) handleSDKEvent(sdkEvent copilot.SessionEvent, events cha
 		}
 
 		// Type assert Arguments to map[string]interface{} if possible
-		if args, ok := sdkEvent.Data.Arguments.(map[string]interface{}); ok {
+		if args, ok := sdkEvent.Data.Arguments.(map[string]any); ok {
 			toolCall.Parameters = args
 		}
 

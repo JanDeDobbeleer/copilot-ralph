@@ -56,10 +56,10 @@ func TestResolvePrompt(t *testing.T) {
 
 func TestValidateRunConfig(t *testing.T) {
 	tests := []struct {
-		name        string
 		config      *core.LoopConfig
-		expectError bool
+		name        string
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name: "valid config",
@@ -141,12 +141,12 @@ func TestBuildLoopConfig(t *testing.T) {
 	tests := []struct {
 		name           string
 		prompt         string
-		maxIterations  int
-		timeout        time.Duration
 		promise        string
 		model          string
 		workingDir     string
 		expectedPrompt string
+		maxIterations  int
+		timeout        time.Duration
 	}{
 		{
 			name:           "uses provided prompt",
@@ -207,8 +207,8 @@ func TestBuildLoopConfig(t *testing.T) {
 
 func TestConfigExists(t *testing.T) {
 	tests := []struct {
-		name     string
 		setup    func(t *testing.T) string
+		name     string
 		expected bool
 	}{
 		{
@@ -247,8 +247,8 @@ func TestValidateSettings(t *testing.T) {
 		name        string
 		systemMode  string
 		logLevel    string
-		expectError bool
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name:        "invalid system message mode",
@@ -337,7 +337,7 @@ func TestToolErrorsContinueExecution(t *testing.T) {
 		events <- &core.ToolExecutionEvent{
 			ToolEvent: core.ToolEvent{
 				ToolName:   "view",
-				Parameters: map[string]interface{}{"path": "nonexistent"},
+				Parameters: map[string]any{"path": "nonexistent"},
 				Iteration:  1,
 			},
 			Error: errors.New("Path does not exist"),
@@ -347,7 +347,7 @@ func TestToolErrorsContinueExecution(t *testing.T) {
 		events <- &core.ToolExecutionEvent{
 			ToolEvent: core.ToolEvent{
 				ToolName:   "list",
-				Parameters: map[string]interface{}{},
+				Parameters: map[string]any{},
 				Iteration:  1,
 			},
 			Result: "file1.txt, file2.txt",
