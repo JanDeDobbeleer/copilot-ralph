@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,25 +11,6 @@ import (
 
 	"github.com/JanDeDobbeleer/copilot-ralph/internal/core"
 )
-
-func TestResolvePromptFromStdin(t *testing.T) {
-	// Create a temp file to simulate piped stdin
-	tmp := t.TempDir()
-	path := filepath.Join(tmp, "prompt.txt")
-	require.NoError(t, os.WriteFile(path, []byte("stdin prompt"), 0644))
-
-	f, err := os.Open(path)
-	require.NoError(t, err)
-	defer f.Close()
-
-	oldStdin := os.Stdin
-	os.Stdin = f
-	defer func() { os.Stdin = oldStdin }()
-
-	res, err := resolvePrompt([]string{})
-	require.NoError(t, err)
-	assert.Equal(t, "stdin prompt", res)
-}
 
 func TestDisplayEventsAndPrints(t *testing.T) {
 	// Capture stdout

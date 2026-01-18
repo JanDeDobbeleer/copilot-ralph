@@ -6,7 +6,6 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -94,7 +93,7 @@ func init() {
 // runLoop executes the AI development loop.
 func runLoop(cmd *cobra.Command, args []string) error {
 	// Resolve prompt from arguments, flag, or stdin
-	prompt, err := resolvePrompt(args)
+	prompt, err := resolvePrompt(args[0])
 	if err != nil {
 		return err
 	}
@@ -237,43 +236,32 @@ func runLoop(cmd *cobra.Command, args []string) error {
 //   - Positional argument (direct text prompt)
 //   - Positional argument as a path to a Markdown file (.md/.markdown)
 //   - Stdin (if piped)
-func resolvePrompt(args []string) (string, error) {
+func resolvePrompt(prompt string) (string, error) {
 	// Priority 1: Positional argument
-	if len(args) > 0 {
-		first := args[0]
-		// If it's a file, validate and read it
-		if info, err := os.Stat(first); err == nil && !info.IsDir() {
-			ext := strings.ToLower(filepath.Ext(first))
-			if ext != ".md" && ext != ".markdown" {
-				return "", fmt.Errorf("file %q must be a Markdown file with extension .md or .markdown", first)
-			}
-
-			data, err := os.ReadFile(first)
-			if err != nil {
-				return "", fmt.Errorf("failed to read prompt file %q: %w", first, err)
-			}
-
-			return string(data), nil
-		}
-
-		// Not a file - treat as direct prompt
-		return first, nil
+	if prompt == "" {
+		return "", errors.New("no prompt provided")
 	}
 
-	// Priority 2: Stdin (if piped)
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		// Data is being piped
-		scanner := bufio.NewScanner(os.Stdin)
-		if scanner.Scan() {
-			return scanner.Text(), nil
-		}
-		if err := scanner.Err(); err != nil {
-			return "", fmt.Errorf("failed to read from stdin: %w", err)
-		}
+	info, err := os.Stat(prompt)
+	if err != nil {
+		return prompt, nil
 	}
 
-	return "", errors.New("no prompt provided")
+	if info.IsDir() {
+		return "", fmt.Errorf("prompt path %s is a directory, must be a Markdown file", prompt)
+	}
+
+	ext := strings.ToLower(filepath.Ext(prompt))
+	if ext != ".md" && ext != ".markdown" {
+		return "", fmt.Errorf("file %s must be a Markdown file with extension .md or .markdown", prompt)
+	}
+
+	data, err := os.ReadFile(prompt)
+	if err != nil {
+		return "", fmt.Errorf("failed to read prompt file %s: %w", prompt, err)
+	}
+
+	return string(data), nil
 }
 
 // buildLoopConfig creates a LoopConfig from command-line flags.

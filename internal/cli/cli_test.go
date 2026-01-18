@@ -19,7 +19,7 @@ import (
 
 func TestResolvePrompt(t *testing.T) {
 	t.Run("from positional argument", func(t *testing.T) {
-		result, err := resolvePrompt([]string{"test prompt"})
+		result, err := resolvePrompt("test prompt")
 		require.NoError(t, err)
 		assert.Equal(t, "test prompt", result)
 	})
@@ -30,26 +30,13 @@ func TestResolvePrompt(t *testing.T) {
 		content := "# Task\nPlease implement X"
 		require.NoError(t, os.WriteFile(path, []byte(content), 0644))
 
-		result, err := resolvePrompt([]string{path})
+		result, err := resolvePrompt(path)
 		require.NoError(t, err)
 		assert.Equal(t, content, result)
 	})
 
-	t.Run("from stdin when piped", func(t *testing.T) {
-		oldStdin := os.Stdin
-		r, w, _ := os.Pipe()
-		_, _ = w.WriteString("stdin prompt\n")
-		w.Close()
-		os.Stdin = r
-		defer func() { os.Stdin = oldStdin }()
-
-		result, err := resolvePrompt([]string{})
-		require.NoError(t, err)
-		assert.Equal(t, "stdin prompt", result)
-	})
-
 	t.Run("empty when no input", func(t *testing.T) {
-		_, err := resolvePrompt([]string{})
+		_, err := resolvePrompt("")
 		require.Error(t, err)
 	})
 }
