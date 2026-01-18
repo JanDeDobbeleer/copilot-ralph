@@ -217,23 +217,7 @@ func (e *LoopEngine) executeIteration() error {
 
 				case *sdk.ErrorEvent:
 					// SDK errors are typically tool execution failures, which are recoverable
-					// Log the error but continue execution
 					e.emit(NewErrorEvent(ev.Err, iteration, true))
-					// Don't return - continue processing
-
-				case *sdk.ResponseCompleteEvent:
-					// Response complete
-					// If we have complete message content and haven't sent it yet, send it now
-					if ev.Message.Content != "" && responseText.Len() == 0 {
-						// No streaming deltas were received, emit the complete message
-						responseText.WriteString(ev.Message.Content)
-						e.emit(NewAIResponseEvent(ev.Message.Content, iteration))
-					}
-
-					// Check full text for promise
-					if detectPromise(responseText.String(), e.config.PromisePhrase) {
-						e.emit(NewPromiseDetectedEvent(e.config.PromisePhrase, "ai_response", iteration))
-					}
 				}
 			}
 		}

@@ -22,11 +22,6 @@ func TestEventTypesAndConstructors(t *testing.T) {
 	assert.Equal(t, EventTypeToolResult, r.Type())
 	assert.Equal(t, "res", r.Result)
 
-	msg := Message{Role: RoleAssistant, Content: "done"}
-	rc := NewResponseCompleteEvent(msg)
-	assert.Equal(t, EventTypeResponseComplete, rc.Type())
-	assert.Equal(t, "done", rc.Message.Content)
-
 	e := NewErrorEvent(nil)
 	assert.Equal(t, EventTypeError, e.Type())
 	assert.Equal(t, "", e.Error())

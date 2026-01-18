@@ -99,28 +99,28 @@ func TestHandleSDKEventVariousTypes(t *testing.T) {
 	pending := make(map[string]ToolCall)
 
 	// assistant.message_delta
-	c.handleSDKEvent(generated.SessionEvent{Type: "assistant.message_delta", Data: generated.Data{DeltaContent: ptrString("part")}}, events, new(string), closeDone, pending)
+	c.handleSDKEvent(generated.SessionEvent{Type: "assistant.message_delta", Data: generated.Data{DeltaContent: ptrString("part")}}, events, closeDone, pending)
 
 	// assistant.message
-	c.handleSDKEvent(generated.SessionEvent{Type: "assistant.message", Data: generated.Data{Content: ptrString("full")}}, events, new(string), closeDone, pending)
+	c.handleSDKEvent(generated.SessionEvent{Type: "assistant.message", Data: generated.Data{Content: ptrString("full")}}, events, closeDone, pending)
 
 	// tool.execution_start
-	c.handleSDKEvent(generated.SessionEvent{Type: "tool.execution_start", Data: generated.Data{ToolName: ptrString("edit"), ToolCallID: ptrString("1"), Arguments: map[string]any{"path": "a.go"}}}, events, new(string), closeDone, pending)
+	c.handleSDKEvent(generated.SessionEvent{Type: "tool.execution_start", Data: generated.Data{ToolName: ptrString("edit"), ToolCallID: ptrString("1"), Arguments: map[string]any{"path": "a.go"}}}, events, closeDone, pending)
 
 	// tool.execution_complete success
 	// adapt to copilot.ToolResult fields
-	c.handleSDKEvent(generated.SessionEvent{Type: "tool.execution_complete", Data: generated.Data{ToolCallID: ptrString("1"), ToolName: ptrString("edit"), Result: &generated.Result{Content: "ok"}, Success: ptrBool(true)}}, events, new(string), closeDone, pending)
+	c.handleSDKEvent(generated.SessionEvent{Type: "tool.execution_complete", Data: generated.Data{ToolCallID: ptrString("1"), ToolName: ptrString("edit"), Result: &generated.Result{Content: "ok"}, Success: ptrBool(true)}}, events, closeDone, pending)
 
 	// tool.execution_complete failure with Error.String
 	errStr := "tool failed"
-	c.handleSDKEvent(generated.SessionEvent{Type: "tool.execution_complete", Data: generated.Data{ToolCallID: ptrString("2"), ToolName: ptrString("run"), Result: &generated.Result{Content: ""}, Success: ptrBool(false), Error: &generated.ErrorUnion{String: &errStr}}}, events, new(string), closeDone, pending)
+	c.handleSDKEvent(generated.SessionEvent{Type: "tool.execution_complete", Data: generated.Data{ToolCallID: ptrString("2"), ToolName: ptrString("run"), Result: &generated.Result{Content: ""}, Success: ptrBool(false), Error: &generated.ErrorUnion{String: &errStr}}}, events, closeDone, pending)
 
 	// session.error
 	msg := "bad"
-	c.handleSDKEvent(generated.SessionEvent{Type: "session.error", Data: generated.Data{Message: &msg}}, events, new(string), closeDone, pending)
+	c.handleSDKEvent(generated.SessionEvent{Type: "session.error", Data: generated.Data{Message: &msg}}, events, closeDone, pending)
 
 	// session.idle should call closeDone
-	c.handleSDKEvent(generated.SessionEvent{Type: "session.idle"}, events, new(string), closeDone, pending)
+	c.handleSDKEvent(generated.SessionEvent{Type: "session.idle"}, events, closeDone, pending)
 
 	// Drain events and assert some expected types
 	received := []Event{}

@@ -108,31 +108,6 @@ func NewToolResultEvent(toolCall ToolCall, result string, err error) *ToolResult
 	}
 }
 
-// ResponseCompleteEvent indicates that the assistant's response is complete.
-type ResponseCompleteEvent struct {
-	// Message contains the complete message if available.
-	Message   Message
-	timestamp time.Time
-}
-
-// Type returns EventTypeResponseComplete.
-func (e *ResponseCompleteEvent) Type() EventType {
-	return EventTypeResponseComplete
-}
-
-// Timestamp returns when the event occurred.
-func (e *ResponseCompleteEvent) Timestamp() time.Time {
-	return e.timestamp
-}
-
-// NewResponseCompleteEvent creates a new ResponseCompleteEvent.
-func NewResponseCompleteEvent(msg Message) *ResponseCompleteEvent {
-	return &ResponseCompleteEvent{
-		Message:   msg,
-		timestamp: time.Now(),
-	}
-}
-
 // ErrorEvent represents an error that occurred during processing.
 type ErrorEvent struct {
 	// Err contains the error that occurred.

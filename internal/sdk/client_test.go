@@ -269,14 +269,6 @@ func TestEventTypes(t *testing.T) {
 		assert.WithinDuration(t, time.Now(), event.Timestamp(), time.Second)
 	})
 
-	t.Run("response complete event", func(t *testing.T) {
-		msg := Message{Role: RoleAssistant, Content: "done"}
-		event := NewResponseCompleteEvent(msg)
-		assert.Equal(t, EventTypeResponseComplete, event.Type())
-		assert.Equal(t, RoleAssistant, event.Message.Role)
-		assert.WithinDuration(t, time.Now(), event.Timestamp(), time.Second)
-	})
-
 	t.Run("error event", func(t *testing.T) {
 		err := errors.New("test error")
 		event := NewErrorEvent(err)

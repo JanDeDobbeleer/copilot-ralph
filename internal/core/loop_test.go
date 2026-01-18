@@ -215,13 +215,6 @@ func (m *MockSDKClient) SendPrompt(ctx context.Context, prompt string) (<-chan s
 			// Also send a tool result event to simulate completed tool execution
 			events <- sdk.NewToolResultEvent(tc, "Mock tool result", nil)
 		}
-
-		// Signal completion
-		events <- sdk.NewResponseCompleteEvent(sdk.Message{
-			Role:      sdk.RoleAssistant,
-			Content:   responseText,
-			Timestamp: time.Now(),
-		})
 	}()
 
 	return events, nil
@@ -262,11 +255,6 @@ func (m *SlowMockSDKClient) SendPrompt(ctx context.Context, prompt string) (<-ch
 		}
 
 		events <- sdk.NewTextEvent("Slow response")
-		events <- sdk.NewResponseCompleteEvent(sdk.Message{
-			Role:      sdk.RoleAssistant,
-			Content:   "Slow response",
-			Timestamp: time.Now(),
-		})
 	}()
 
 	return events, nil

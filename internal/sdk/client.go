@@ -357,7 +357,6 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, prompt string, event
 		})
 	}
 
-	var responseContent string
 	var sessionErr error
 	pendingToolCalls := make(map[string]ToolCall)
 
@@ -376,7 +375,7 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, prompt string, event
 			sessionErr = fmt.Errorf("SDK error: %s", *event.Data.Message)
 		}
 
-		c.handleSDKEvent(event, events, &responseContent, closeDone, pendingToolCalls)
+		c.handleSDKEvent(event, events, closeDone, pendingToolCalls)
 	})
 
 	defer unsubscribe()
@@ -406,28 +405,19 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, prompt string, event
 		}
 	}
 
-	// Signal completion
-	_ = safeEventSender(events, NewResponseCompleteEvent(Message{
-		Role:      RoleAssistant,
-		Content:   responseContent,
-		Timestamp: time.Now(),
-	}))
-
 	return nil
 }
 
 // handleSDKEvent processes events from the Copilot SDK and forwards them.
 // Uses safeEventSender to protect against writing to closed channels.
-func (c *CopilotClient) handleSDKEvent(sdkEvent copilot.SessionEvent, events chan<- Event, responseContent *string, closeDone func(), pendingToolCalls map[string]ToolCall) {
+func (c *CopilotClient) handleSDKEvent(sdkEvent copilot.SessionEvent, events chan<- Event, closeDone func(), pendingToolCalls map[string]ToolCall) {
 	switch sdkEvent.Type {
 	case "assistant.message_delta", "assistant.reasoning_delta":
 		if sdkEvent.Data.DeltaContent == nil {
 			return
 		}
 
-		text := *sdkEvent.Data.DeltaContent
-		*responseContent += text
-		_ = safeEventSender(events, NewTextEvent(text))
+		_ = safeEventSender(events, NewTextEvent(*sdkEvent.Data.DeltaContent))
 
 	case "assistant.message", "assistant.reasoning":
 		// Complete assistant message
@@ -435,10 +425,7 @@ func (c *CopilotClient) handleSDKEvent(sdkEvent copilot.SessionEvent, events cha
 			return
 		}
 
-		if *responseContent == "" {
-			*responseContent = *sdkEvent.Data.Content
-			_ = safeEventSender(events, NewTextEvent(*sdkEvent.Data.Content))
-		}
+		_ = safeEventSender(events, NewTextEvent(*sdkEvent.Data.Content))
 
 	case "tool.execution_start":
 		// Tool execution started - the SDK handles this internally
