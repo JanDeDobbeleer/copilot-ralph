@@ -107,11 +107,8 @@ func (e *LoopEngine) State() LoopState {
 
 // BuildSystemPrompt constructs the system prompt from the embedded template.
 // It replaces {{.Task}} with the actual user task and {{.Promise}} with the completion phrase.
-func BuildSystemPrompt(task, promisePhrase string) string {
-	// Replace the template variables
-	result := strings.ReplaceAll(systemPromptTemplate, "{{.Task}}", task)
-	result = strings.ReplaceAll(result, "{{.Promise}}", promisePhrase)
-	return result
+func BuildSystemPrompt(promisePhrase string) string {
+	return strings.ReplaceAll(systemPromptTemplate, "{{.Promise}}", promisePhrase)
 }
 
 // Iteration returns the current iteration number (1-based).

@@ -65,16 +65,16 @@ Examples:
 }
 
 var (
-	runMaxIterations     int
-	runTimeout           time.Duration
-	runPromise           string
-	runModel             string
-	runWorkingDir        string
-	runDryRun            bool
-	runStreaming         bool
-	runSystemMessage     string
-	runSystemMessageMode string
-	runLogLevel          string
+	runMaxIterations    int
+	runTimeout          time.Duration
+	runPromise          string
+	runModel            string
+	runWorkingDir       string
+	runDryRun           bool
+	runStreaming        bool
+	runSystemPrompt     string
+	runSystemPromptMode string
+	runLogLevel         string
 )
 
 func init() {
@@ -85,8 +85,8 @@ func init() {
 	runCmd.Flags().StringVar(&runWorkingDir, "working-dir", ".", "working directory for loop execution")
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "show what would be executed without running")
 	runCmd.Flags().BoolVar(&runStreaming, "streaming", true, "enable streaming responses")
-	runCmd.Flags().StringVar(&runSystemMessage, "system-message", "", "custom system message")
-	runCmd.Flags().StringVar(&runSystemMessageMode, "system-message-mode", "append", "system message mode: append or replace")
+	runCmd.Flags().StringVar(&runSystemPrompt, "system-prompt", "", "custom system message, can be a prompt or path to Markdown file")
+	runCmd.Flags().StringVar(&runSystemPromptMode, "system-prompt-mode", "append", "system message mode: append or replace")
 	runCmd.Flags().StringVar(&runLogLevel, "log-level", "info", "log level: debug, info, warn, error")
 }
 
@@ -297,8 +297,8 @@ func validateRunConfig(cfg *core.LoopConfig) error {
 // validateSettings validates additional CLI flag settings.
 func validateSettings() error {
 	// Validate system message mode
-	if runSystemMessageMode != "append" && runSystemMessageMode != "replace" {
-		return fmt.Errorf("invalid system-message-mode: %q (must be append or replace)", runSystemMessageMode)
+	if runSystemPromptMode != "append" && runSystemPromptMode != "replace" {
+		return fmt.Errorf("invalid system-prompt-mode: %q (must be append or replace)", runSystemPromptMode)
 	}
 
 	return nil
@@ -457,11 +457,16 @@ func createSDKClient(loopConfig *core.LoopConfig) (*sdk.CopilotClient, error) {
 	}
 
 	// Build system prompt from template with user's task and promise phrase
-	systemPrompt := core.BuildSystemPrompt(loopConfig.Prompt, loopConfig.PromisePhrase)
+	systemPrompt := core.BuildSystemPrompt(loopConfig.PromisePhrase)
 
 	// Use the built-in system prompt, or override if user specified custom one
-	if runSystemMessage != "" {
-		opts = append(opts, sdk.WithSystemMessage(runSystemMessage, runSystemMessageMode))
+	if runSystemPrompt != "" {
+		systemPrompt, err := resolvePrompt(runSystemPrompt)
+		if err != nil {
+			return nil, err
+		}
+
+		opts = append(opts, sdk.WithSystemMessage(systemPrompt, runSystemPromptMode))
 	} else {
 		// Use the default system prompt template with "append" mode
 		opts = append(opts, sdk.WithSystemMessage(systemPrompt, "append"))

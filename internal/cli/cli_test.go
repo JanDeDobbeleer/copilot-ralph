@@ -242,18 +242,18 @@ func TestValidateSettings(t *testing.T) {
 			systemMode:  "invalid",
 			logLevel:    "info",
 			expectError: true,
-			errorMsg:    "invalid system-message-mode",
+			errorMsg:    "invalid system-prompt-mode",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save and restore globals
-			oldSystemMode := runSystemMessageMode
-			runSystemMessageMode = tt.systemMode
+			oldSystemMode := runSystemPromptMode
+			runSystemPromptMode = tt.systemMode
 
 			defer func() {
-				runSystemMessageMode = oldSystemMode
+				runSystemPromptMode = oldSystemMode
 			}()
 
 			err := validateSettings()

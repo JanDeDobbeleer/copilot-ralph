@@ -87,21 +87,21 @@ func TestCreateSDKClientReturnsClient(t *testing.T) {
 	oldRunModel := runModel
 	oldRunStreaming := runStreaming
 	oldRunLogLevel := runLogLevel
-	oldRunSystemMessage := runSystemMessage
-	oldRunSystemMessageMode := runSystemMessageMode
+	oldRunSystemMessage := runSystemPrompt
+	oldRunSystemMessageMode := runSystemPromptMode
 	defer func() {
 		runModel = oldRunModel
 		runStreaming = oldRunStreaming
 		runLogLevel = oldRunLogLevel
-		runSystemMessage = oldRunSystemMessage
-		runSystemMessageMode = oldRunSystemMessageMode
+		runSystemPrompt = oldRunSystemMessage
+		runSystemPromptMode = oldRunSystemMessageMode
 	}()
 
 	runModel = "gpt-test"
 	runStreaming = true
 	runLogLevel = "info"
-	runSystemMessage = ""
-	runSystemMessageMode = "append"
+	runSystemPrompt = ""
+	runSystemPromptMode = "append"
 
 	cfg := &core.LoopConfig{Prompt: "task", PromisePhrase: "I'm special!", Model: "gpt-test", Timeout: 30 * time.Second, MaxIterations: 1}
 	client, err := createSDKClient(cfg)

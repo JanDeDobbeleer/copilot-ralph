@@ -242,11 +242,6 @@ func (e *LoopEngine) buildIterationPrompt(iteration int) string {
 	// Add original task prompt
 	builder.WriteString(e.config.Prompt)
 
-	// Add completion instructions if promise is configured
-	if e.config.PromisePhrase != "" {
-		builder.WriteString(fmt.Sprintf("\n\nWhen the task is complete, say \"%s\" to signal completion.", e.config.PromisePhrase))
-	}
-
 	return builder.String()
 }
 

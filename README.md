@@ -146,8 +146,8 @@ ralph run --dry-run "Refactor database layer"
 
 # With custom system message
 ralph run \
-  --system-message "You are an expert Go developer" \
-  --system-message-mode replace \
+  --system-prompt "You are an expert Go developer" \
+  --system-prompt-mode replace \
   "Optimize the code"
 ```
 
@@ -160,8 +160,8 @@ Available flags:
 - `--working-dir` - Working directory (default: current)
 - `--log-level` - Log level: debug, info, warn, error (default: info)
 - `--streaming` - Enable streaming responses (default: true)
-- `--system-message` - Custom system message
-- `--system-message-mode` - append or replace (default: append)
+- `--system-prompt` - Custom system message
+- `--system-prompt-mode` - append or replace (default: append)
 - `--dry-run` - Show configuration without running
 
 ### `ralph version`

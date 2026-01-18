@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -15,92 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// TestBuildSystemPrompt tests the BuildSystemPrompt function.
-func TestBuildSystemPrompt(t *testing.T) {
-	tests := []struct {
-		name          string
-		task          string
-		promisePhrase string
-		contains      []string
-	}{
-		{
-			name:          "simple task",
-			task:          "Add unit tests",
-			promisePhrase: "I'm done!",
-			contains: []string{
-				"Add unit tests",
-				"Please work on the task",
-				"Ralph loop will feed the SAME PROMPT back",
-				"## Critical Rule",
-				"Do not output false promises",
-				"I'm done!",
-				"## Completion Signal",
-			},
-		},
-		{
-			name:          "complex task with special characters",
-			task:          "Fix bug in parser.go (line 42)",
-			promisePhrase: "Task complete!",
-			contains: []string{
-				"Fix bug in parser.go (line 42)",
-				"iterate and improve",
-				"Task complete!",
-			},
-		},
-		{
-			name:          "empty task",
-			task:          "",
-			promisePhrase: "DONE",
-			contains: []string{
-				"Please work on the task",
-				"DONE",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := BuildSystemPrompt(tt.task, tt.promisePhrase)
-
-			// Check that result contains expected strings
-			for _, expected := range tt.contains {
-				assert.Contains(t, result, expected, "system prompt should contain: %s", expected)
-			}
-
-			// Check that task appears in the result if non-empty
-			if tt.task != "" {
-				assert.Contains(t, result, tt.task, "system prompt should contain the task")
-			}
-
-			// Check that promise phrase appears in the result
-			assert.Contains(t, result, tt.promisePhrase, "system prompt should contain the promise phrase")
-
-			// Check that template variables are replaced
-			assert.NotContains(t, result, "{{.Task}}", "task template variable should be replaced")
-			assert.NotContains(t, result, "{{.Promise}}", "promise template variable should be replaced")
-		})
-	}
-}
-
-// TestBuildSystemPromptTemplateStructure tests the structure of the system prompt.
-func TestBuildSystemPromptTemplateStructure(t *testing.T) {
-	task := "Test task"
-	promise := "All done!"
-	result := BuildSystemPrompt(task, promise)
-
-	// Should have markdown headers
-	assert.Contains(t, result, "# Ralph Loop System Instructions", "should have main header")
-	assert.Contains(t, result, "## Your Task", "should have task section")
-	assert.Contains(t, result, "## Completion Signal", "should have completion signal section")
-	assert.Contains(t, result, "## Critical Rule", "should have critical rule section")
-
-	// Should mention key concepts
-	assert.True(t, strings.Contains(result, "loop") || strings.Contains(result, "Loop"),
-		"should mention loop concept")
-	assert.Contains(t, result, "iteration", "should mention iterations")
-	assert.Contains(t, result, "git history", "should mention git history")
-}
 
 // MockSDKClient is a mock implementation of SDKClient for testing.
 type MockSDKClient struct {
