@@ -40,11 +40,16 @@ Ralph implements the "Ralph Wiggum" technique for self-referential AI developmen
 ## Features
 
 ✨ **Iterative AI Loops** - Run multiple AI iterations until task completion
+
 ⚙️ **Flexible Configuration** - Configure loops via command-line flags
+
 🤖 **GitHub Copilot Integration** - Powered by GitHub Copilot SDK
- **Real-time Event Streaming** - Watch iteration progress and tool execution🛠️ **Tool Execution** - AI can read files, run commands, and make changes
-⏱️ **Timeout Controls** - Prevent runaway loops with safety limits🛠️ **Tool Execution** - AI can read files, run commands, and make changes
+
+📈 **Real-time Event Streaming** - Watch iteration progress and tool execution
+
 ⏱️ **Timeout Controls** - Prevent runaway loops with safety limits
+
+🛠️ **Tool Execution** - AI can read files, run commands, and make changes
 
 ## Quick Start
 
