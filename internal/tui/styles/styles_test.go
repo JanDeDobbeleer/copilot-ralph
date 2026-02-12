@@ -22,5 +22,5 @@ func TestRalphWiggumAndStyles(t *testing.T) {
 	assert.NotEmpty(t, Success)
 
 	// Verify style types are lipgloss styles
-	_ = lipgloss.NewStyle().Copy()
+	_ = lipgloss.NewStyle()
 }

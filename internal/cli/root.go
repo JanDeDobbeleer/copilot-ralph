@@ -7,6 +7,8 @@
 package cli
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 
 	"github.com/JanDeDobbeleer/copilot-ralph/pkg/version"
@@ -27,8 +29,12 @@ development loops using GitHub Copilot and Bubble Tea TUI.`,
 )
 
 // Execute runs the root command and returns any error.
-func Execute() error {
-	return rootCmd.Execute()
+func Execute(ctx context.Context) error {
+	if ctx == nil {
+		return rootCmd.Execute()
+	}
+
+	return rootCmd.ExecuteContext(ctx)
 }
 
 func init() {
