@@ -41,8 +41,8 @@ test: ## Run tests
 
 test-coverage: ## Run tests with coverage report
 	@echo "Running tests with coverage..."
-	go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
-	go tool cover -html=coverage.out -o coverage.html
+	go test -v -race -coverprofile="coverage.out" -covermode=atomic ./...
+	go tool cover -html="coverage.out" -o coverage.html
 	@echo "Coverage report: coverage.html"
 
 bench: ## Run benchmarks
