@@ -1,7 +1,6 @@
 package core
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -23,7 +22,7 @@ func TestToolOutputPromiseAndFileChange(t *testing.T) {
 	cfg := &LoopConfig{Prompt: "Task", MaxIterations: 1, PromisePhrase: "Done"}
 	eng := NewLoopEngine(cfg, mock)
 
-	result, err := eng.Start(context.Background())
+	result, err := eng.Start(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, StateComplete, result.State)
 }
@@ -41,7 +40,7 @@ func TestToolResultTriggersPromiseDetectedEvent(t *testing.T) {
 
 	events := eng.Events()
 	go func() {
-		_, _ = eng.Start(context.Background())
+		_, _ = eng.Start(t.Context())
 	}()
 
 	seen := false

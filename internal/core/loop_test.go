@@ -40,9 +40,13 @@ func NewMockSDKClient() *MockSDKClient {
 }
 
 // Start implements SDKClient.
-func (m *MockSDKClient) Start() error {
+func (m *MockSDKClient) Start(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if ctx == nil {
+		return errors.New("context cannot be nil")
+	}
 
 	if m.StartError != nil {
 		return m.StartError
@@ -364,7 +368,7 @@ func TestLoopEngine_StateTransitions(t *testing.T) {
 		}
 		engine := NewLoopEngine(config, mockSDK)
 
-		result, err := engine.Start(context.Background())
+		result, err := engine.Start(t.Context())
 
 		require.NoError(t, err)
 		assert.Equal(t, StateComplete, engine.State())
@@ -385,7 +389,7 @@ func TestLoopEngine_StateTransitions(t *testing.T) {
 		engine := NewLoopEngine(config, mockSDK)
 
 		// Start in goroutine
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		resultCh := make(chan struct {
 			result *LoopResult
 			err    error
@@ -423,7 +427,7 @@ func TestLoopEngine_MaxIterations(t *testing.T) {
 	}
 	engine := NewLoopEngine(config, mockSDK)
 
-	result, err := engine.Start(context.Background())
+	result, err := engine.Start(t.Context())
 
 	// Max iterations now completes normally, not as a failure
 	require.NoError(t, err)
@@ -448,7 +452,7 @@ func TestLoopEngine_Timeout(t *testing.T) {
 	}
 	engine := NewLoopEngine(config, mockSDK)
 
-	result, err := engine.Start(context.Background())
+	result, err := engine.Start(t.Context())
 
 	assert.ErrorIs(t, err, ErrLoopTimeout)
 	assert.Equal(t, StateFailed, engine.State())
@@ -465,7 +469,7 @@ func TestLoopEngine_DryRun(t *testing.T) {
 	}
 	engine := NewLoopEngine(config, nil) // No SDK for dry run
 
-	result, err := engine.Start(context.Background())
+	result, err := engine.Start(t.Context())
 
 	// Max iterations now completes normally
 	require.NoError(t, err)
@@ -480,7 +484,7 @@ func TestLoopEngine_SDKErrors(t *testing.T) {
 		mockSDK.StartError = errors.New("sdk start failed")
 
 		engine := NewLoopEngine(nil, mockSDK)
-		result, err := engine.Start(context.Background())
+		result, err := engine.Start(t.Context())
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to start SDK")
@@ -492,7 +496,7 @@ func TestLoopEngine_SDKErrors(t *testing.T) {
 		mockSDK.CreateSessionError = errors.New("session creation failed")
 
 		engine := NewLoopEngine(nil, mockSDK)
-		result, err := engine.Start(context.Background())
+		result, err := engine.Start(t.Context())
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to create SDK session")
@@ -509,7 +513,7 @@ func TestLoopEngine_SDKErrors(t *testing.T) {
 			PromisePhrase: "done",
 		}
 		engine := NewLoopEngine(config, mockSDK)
-		result, err := engine.Start(context.Background())
+		result, err := engine.Start(t.Context())
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to send prompt")

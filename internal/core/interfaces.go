@@ -12,7 +12,7 @@ import (
 // This interface abstracts the SDK implementation for testability.
 type SDKClient interface {
 	// Start initializes the SDK client.
-	Start() error
+	Start(ctx context.Context) error
 	// Stop closes the SDK client and releases resources.
 	Stop() error
 	// CreateSession creates a new SDK session.

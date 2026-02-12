@@ -116,11 +116,11 @@ func TestCopilotClientStartStop(t *testing.T) {
 		client, err := NewCopilotClient()
 		require.NoError(t, err)
 
-		err = client.Start()
+		err = client.Start(t.Context())
 		require.NoError(t, err)
 
 		// Starting again should be idempotent
-		err = client.Start()
+		err = client.Start(t.Context())
 		require.NoError(t, err)
 
 		err = client.Stop()
@@ -142,7 +142,7 @@ func TestCopilotClientCreateSession(t *testing.T) {
 
 		// If SDK is not available, CreateSession will return an error "SDK client not initialized" when the client wasn't started.
 		// This expectation ensures tests behave correctly when SDK is absent.
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
@@ -156,10 +156,10 @@ func TestCopilotClientCreateSession(t *testing.T) {
 		defer client.Stop()
 
 		// Start the client to ensure sdkClient is initialized
-		err = client.Start()
+		err = client.Start(t.Context())
 		require.NoError(t, err)
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -171,7 +171,7 @@ func TestCopilotClientCreateSession(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
@@ -187,14 +187,14 @@ func TestCopilotClientDestroySession(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			// SDK may be missing; accept the known error message
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
 		}
 
-		err = client.DestroySession(context.Background())
+		err = client.DestroySession(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -204,7 +204,7 @@ func TestCopilotClientDestroySession(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		err = client.DestroySession(context.Background())
+		err = client.DestroySession(t.Context())
 		require.NoError(t, err)
 	})
 }
@@ -221,7 +221,7 @@ func TestCopilotClientConcurrency(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			if err.Error() == "SDK client not initialized" {
 				// SDK missing, accept this outcome
@@ -560,7 +560,7 @@ func TestSendPromptOnceWithFakeSession(t *testing.T) {
 	defer close(events)
 
 	// call sendPromptWithRetry with a canceled context to cover the cancellation early-return path
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	c.sendPromptWithRetry(ctx, "hello", events)
 	// no error expected; function returns after cancellation
