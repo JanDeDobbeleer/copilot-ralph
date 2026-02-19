@@ -236,7 +236,7 @@ func (e *LoopEngine) buildIterationPrompt(iteration int) string {
 	var builder strings.Builder
 
 	// Add iteration context
-	builder.WriteString(fmt.Sprintf("[Iteration %d/%d]\n\n", iteration, e.config.MaxIterations))
+	fmt.Fprintf(&builder, "[Iteration %d/%d]\n\n", iteration, e.config.MaxIterations)
 
 	// Add original task prompt
 	builder.WriteString(e.config.Prompt)
