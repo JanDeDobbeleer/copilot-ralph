@@ -116,11 +116,11 @@ func TestCopilotClientStartStop(t *testing.T) {
 		client, err := NewCopilotClient()
 		require.NoError(t, err)
 
-		err = client.Start()
+		err = client.Start(t.Context())
 		require.NoError(t, err)
 
 		// Starting again should be idempotent
-		err = client.Start()
+		err = client.Start(t.Context())
 		require.NoError(t, err)
 
 		err = client.Stop()
@@ -142,7 +142,7 @@ func TestCopilotClientCreateSession(t *testing.T) {
 
 		// If SDK is not available, CreateSession will return an error "SDK client not initialized" when the client wasn't started.
 		// This expectation ensures tests behave correctly when SDK is absent.
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
@@ -156,10 +156,10 @@ func TestCopilotClientCreateSession(t *testing.T) {
 		defer client.Stop()
 
 		// Start the client to ensure sdkClient is initialized
-		err = client.Start()
+		err = client.Start(t.Context())
 		require.NoError(t, err)
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -171,7 +171,7 @@ func TestCopilotClientCreateSession(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
@@ -187,14 +187,14 @@ func TestCopilotClientDestroySession(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			// SDK may be missing; accept the known error message
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
 		}
 
-		err = client.DestroySession(context.Background())
+		err = client.DestroySession(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -204,7 +204,7 @@ func TestCopilotClientDestroySession(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		err = client.DestroySession(context.Background())
+		err = client.DestroySession(t.Context())
 		require.NoError(t, err)
 	})
 }
@@ -221,7 +221,7 @@ func TestCopilotClientConcurrency(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Stop()
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			if err.Error() == "SDK client not initialized" {
 				// SDK missing, accept this outcome
@@ -437,7 +437,7 @@ func (f *fakeSession) Send(opts any) (string, error) {
 			if h == nil {
 				continue
 			}
-			h(copilot.SessionEvent{Type: "assistant.message_delta", Data: copilot.Data{DeltaContent: ptrString("Hello ")}})
+			h(copilot.SessionEvent{Type: "assistant.message_delta", Data: copilot.Data{DeltaContent: new("Hello ")}})
 		}
 
 		// 2) final message
@@ -445,7 +445,7 @@ func (f *fakeSession) Send(opts any) (string, error) {
 			if h == nil {
 				continue
 			}
-			h(copilot.SessionEvent{Type: "assistant.message", Data: copilot.Data{Content: ptrString("Hello world")}})
+			h(copilot.SessionEvent{Type: "assistant.message", Data: copilot.Data{Content: new("Hello world")}})
 		}
 
 		// 3) session idle
@@ -466,8 +466,6 @@ func (f *fakeSession) Send(opts any) (string, error) {
 
 func (f *fakeSession) Abort() error   { return nil }
 func (f *fakeSession) Destroy() error { return nil }
-
-func ptrString(s string) *string { return &s }
 
 // testEventDrainTimeout is used by tests that need to drain the events channel
 // without relying on the producer to close it. We use a short timeout to avoid
@@ -492,21 +490,21 @@ func TestHandleSDKEventVariousTypes(t *testing.T) {
 	pending := make(map[string]ToolCall)
 
 	// assistant.message_delta
-	c.handleSDKEvent(copilot.SessionEvent{Type: "assistant.message_delta", Data: copilot.Data{DeltaContent: ptrString("part")}}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Type: "assistant.message_delta", Data: copilot.Data{DeltaContent: new("part")}}, events, closeDone, pending)
 
 	// assistant.message
-	c.handleSDKEvent(copilot.SessionEvent{Type: "assistant.message", Data: copilot.Data{Content: ptrString("full")}}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Type: "assistant.message", Data: copilot.Data{Content: new("full")}}, events, closeDone, pending)
 
 	// tool.execution_start
-	c.handleSDKEvent(copilot.SessionEvent{Type: "tool.execution_start", Data: copilot.Data{ToolName: ptrString("edit"), ToolCallID: ptrString("1"), Arguments: map[string]any{"path": "a.go"}}}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Type: "tool.execution_start", Data: copilot.Data{ToolName: new("edit"), ToolCallID: new("1"), Arguments: map[string]any{"path": "a.go"}}}, events, closeDone, pending)
 
 	// tool.execution_complete success
 	// adapt to copilot.ToolResult fields
-	c.handleSDKEvent(copilot.SessionEvent{Type: "tool.execution_complete", Data: copilot.Data{ToolCallID: ptrString("1"), ToolName: ptrString("edit"), Result: &copilot.Result{Content: "ok"}, Success: ptrBool(true)}}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Type: "tool.execution_complete", Data: copilot.Data{ToolCallID: new("1"), ToolName: new("edit"), Result: &copilot.Result{Content: "ok"}, Success: new(true)}}, events, closeDone, pending)
 
 	// tool.execution_complete failure with Error.String
 	errStr := "tool failed"
-	c.handleSDKEvent(copilot.SessionEvent{Type: "tool.execution_complete", Data: copilot.Data{ToolCallID: ptrString("2"), ToolName: ptrString("run"), Result: &copilot.Result{Content: ""}, Success: ptrBool(false), Error: &copilot.ErrorUnion{String: &errStr}}}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Type: "tool.execution_complete", Data: copilot.Data{ToolCallID: new("2"), ToolName: new("run"), Result: &copilot.Result{Content: ""}, Success: new(false), Error: &copilot.ErrorUnion{String: &errStr}}}, events, closeDone, pending)
 
 	// session.error
 	msg := "bad"
@@ -550,8 +548,6 @@ loop:
 	assert.True(t, closed, "closeDone should be called on session.idle")
 }
 
-func ptrBool(b bool) *bool { return &b }
-
 func TestSendPromptOnceWithFakeSession(t *testing.T) {
 	c, err := NewCopilotClient()
 	require.NoError(t, err)
@@ -560,7 +556,7 @@ func TestSendPromptOnceWithFakeSession(t *testing.T) {
 	defer close(events)
 
 	// call sendPromptWithRetry with a canceled context to cover the cancellation early-return path
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	c.sendPromptWithRetry(ctx, "hello", events)
 	// no error expected; function returns after cancellation

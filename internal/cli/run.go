@@ -131,17 +131,19 @@ func runLoop(cmd *cobra.Command, args []string) error {
 	}
 	defer sdkClient.Stop()
 
+	baseCtx := cmd.Context()
+
+	// Set up signal handling for graceful shutdown
+	ctx, cancel := context.WithCancel(baseCtx)
+	defer cancel()
+
 	// Start SDK client
-	if err := sdkClient.Start(); err != nil {
+	if err := sdkClient.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start SDK client: %w", err)
 	}
 
 	// Create loop engine
 	engine := core.NewLoopEngine(loopConfig, sdkClient)
-
-	// Set up signal handling for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)

@@ -173,10 +173,14 @@ func NewCopilotClient(opts ...ClientOption) (*CopilotClient, error) {
 	}, nil
 }
 
-// startLocked starts the client (must be called with lock held).
-func (c *CopilotClient) Start() error {
+// Start starts the client (must be called with lock held).
+func (c *CopilotClient) Start(ctx context.Context) error {
 	if c.started {
 		return nil
+	}
+
+	if ctx == nil {
+		return fmt.Errorf("context cannot be nil")
 	}
 
 	// Initialize the SDK client with options
@@ -186,7 +190,7 @@ func (c *CopilotClient) Start() error {
 	})
 
 	// Start the SDK client
-	if err := c.sdkClient.Start(); err != nil {
+	if err := c.sdkClient.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start SDK client: %w", err)
 	}
 
@@ -238,7 +242,7 @@ func (c *CopilotClient) CreateSession(ctx context.Context) error {
 	}
 
 	// Create SDK session
-	sdkSession, err := c.sdkClient.CreateSession(sessionConfig)
+	sdkSession, err := c.sdkClient.CreateSession(ctx, sessionConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create SDK session: %w", err)
 	}
@@ -381,7 +385,7 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, prompt string, event
 	defer unsubscribe()
 
 	// Send the message
-	_, err := c.sdkSession.Send(copilot.MessageOptions{
+	_, err := c.sdkSession.Send(ctx, copilot.MessageOptions{
 		Prompt: prompt,
 	})
 	if err != nil {
@@ -393,7 +397,7 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, prompt string, event
 	case <-ctx.Done():
 		// Abort the session and close done to unblock any waiting
 		go func() {
-			_ = c.sdkSession.Abort()
+			_ = c.sdkSession.Abort(ctx)
 		}()
 
 		closeDone()
