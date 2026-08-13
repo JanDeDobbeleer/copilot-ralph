@@ -192,6 +192,31 @@ func TestBuildLoopConfig(t *testing.T) {
 	}
 }
 
+func TestRunCommandModelDefault(t *testing.T) {
+	modelFlag := runCmd.Flags().Lookup("model")
+	require.NotNil(t, modelFlag)
+	assert.Equal(t, "auto", modelFlag.DefValue)
+}
+
+func TestRunCommandListModelsDefault(t *testing.T) {
+	listModelsFlag := runCmd.Flags().Lookup("list-models")
+	require.NotNil(t, listModelsFlag)
+	assert.Equal(t, "false", listModelsFlag.DefValue)
+}
+
+func TestRunLoopRequiresPrompt(t *testing.T) {
+	originalListModels := runListModels
+	runListModels = false
+	defer func() {
+		runListModels = originalListModels
+	}()
+
+	err := runLoop(runCmd, nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "prompt is required")
+}
+
 func TestConfigExists(t *testing.T) {
 	tests := []struct {
 		setup    func(t *testing.T) string
@@ -285,15 +310,16 @@ func TestPrintDryRun(t *testing.T) {
 	os.Stdout = w
 
 	err := printDryRun(cfg)
+	require.NoError(t, err)
 
-	w.Close()
+	require.NoError(t, w.Close())
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
-	assert.NoError(t, err)
 	assert.Contains(t, output, "Configuration Preview")
 	assert.Contains(t, output, "test prompt")
 	assert.Contains(t, output, "gpt-4")

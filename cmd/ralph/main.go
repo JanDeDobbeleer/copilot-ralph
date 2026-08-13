@@ -7,15 +7,18 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/JanDeDobbeleer/copilot-ralph/internal/cli"
 )
 
 func main() {
+	ctx := context.Background()
+
 	// TODO: Implement main per specs/cli.md
 	// Initialize root command and execute
-	if err := cli.Execute(); err != nil {
+	if err := cli.Execute(ctx); err != nil {
 		os.Exit(1)
 	}
 }

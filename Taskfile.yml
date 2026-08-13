@@ -1,0 +1,160 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+---
+version: "3"
+
+vars:
+  BINARY_NAME: ralph
+  BUILD_DIR: bin
+  VERSION: '{{.VERSION | default "0.1.0"}}'
+  DETECTED_COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
+  COMMIT: "{{.COMMIT | default .DETECTED_COMMIT}}"
+  DETECTED_BUILD_DATE: '{{dateInZone "2006-01-02T15:04:05Z" (now) "UTC"}}'
+  BUILD_DATE: "{{.BUILD_DATE | default .DETECTED_BUILD_DATE}}"
+  DETECTED_GO_VERSION:
+    sh: go env GOVERSION
+  GO_VERSION: "{{.GO_VERSION | default .DETECTED_GO_VERSION}}"
+  LDFLAGS: >-
+    -X github.com/JanDeDobbeleer/copilot-ralph/pkg/version.Version={{.VERSION}}
+    -X github.com/JanDeDobbeleer/copilot-ralph/pkg/version.Commit={{.COMMIT}}
+    -X github.com/JanDeDobbeleer/copilot-ralph/pkg/version.BuildDate={{.BUILD_DATE}}
+    -X github.com/JanDeDobbeleer/copilot-ralph/pkg/version.GoVersion={{.GO_VERSION}}
+
+tasks:
+  default:
+    cmds:
+      - task: help
+
+  help:
+    desc: Show available tasks
+    cmds:
+      - "{{.TASK_EXE | shellQuote}} --list"
+    silent: true
+
+  build:
+    desc: Build the ralph binary
+    aliases: [b]
+    dir: "{{.BUILD_DIR}}"
+    cmds:
+      - echo "Building {{.BINARY_NAME}}..."
+      - go build -ldflags "{{.LDFLAGS}}" -o "{{.BINARY_NAME}}{{exeExt}}" ../cmd/ralph
+      - echo "Build complete{{":"}} {{.BUILD_DIR}}/{{.BINARY_NAME}}{{exeExt}}"
+
+  install:
+    desc: Install ralph to GOPATH/bin
+    cmds:
+      - echo "Installing {{.BINARY_NAME}}..."
+      - go install -ldflags "{{.LDFLAGS}}" ./cmd/ralph
+      - echo "Installed to $(go env GOPATH)/bin/{{.BINARY_NAME}}{{exeExt}}"
+
+  test:
+    desc: Run tests
+    aliases: [t]
+    cmds:
+      - go test -v -race -cover ./...
+
+  test-coverage:
+    desc: Run tests with a coverage report
+    cmds:
+      - go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report{{":"}} coverage.html"
+
+  bench:
+    desc: Run benchmarks
+    cmds:
+      - go test -bench=. -benchmem ./...
+
+  lint:
+    desc: Run golangci-lint
+    aliases: [l]
+    preconditions:
+      - sh: command -v golangci-lint
+        msg: "golangci-lint is not installed. Run: task dev-deps"
+    cmds:
+      - golangci-lint run
+
+  fmt:
+    desc: Format Go code
+    method: none
+    sources:
+      - "**/*.go"
+    cmds:
+      - for: sources
+        cmd: gofmt -w -s {{.ITEM | shellQuote}}
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  tidy:
+    desc: Tidy and verify dependencies
+    cmds:
+      - go mod tidy
+      - go mod verify
+
+  clean:
+    desc: Clean build and test artifacts
+    aliases: [c]
+    cmds:
+      - cmd: powershell -NoProfile -NonInteractive -Command "Remove-Item -LiteralPath '{{.BUILD_DIR}}' -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath 'coverage.out','coverage.html' -Force -ErrorAction SilentlyContinue"
+        platforms: [windows]
+      - cmd: rm -rf "{{.BUILD_DIR}}" coverage.out coverage.html
+        platforms: [linux, darwin]
+      - go clean
+
+  all:
+    desc: Run all checks and build
+    cmds:
+      - task: tidy
+      - task: fmt
+      - task: vet
+      - task: lint
+      - task: test
+      - task: build
+
+  dev-deps:
+    desc: Install development dependencies
+    cmds:
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+  run:
+    desc: Build and run ralph
+    interactive: true
+    cmds:
+      - task: build
+      - ./{{.BUILD_DIR}}/{{.BINARY_NAME}}{{exeExt}}
+
+  run-init:
+    desc: Build and run ralph init
+    interactive: true
+    cmds:
+      - task: build
+      - ./{{.BUILD_DIR}}/{{.BINARY_NAME}}{{exeExt}} init
+
+  run-version:
+    desc: Build and run ralph version
+    cmds:
+      - task: build
+      - ./{{.BUILD_DIR}}/{{.BINARY_NAME}}{{exeExt}} version
+
+  docker-build:
+    desc: Build the Docker image
+    cmds:
+      - docker build -t "{{.BINARY_NAME}}:{{.VERSION}}" .
+
+  docker-run:
+    desc: Build and run the Docker container
+    interactive: true
+    cmds:
+      - task: docker-build
+      - docker run --rm -it "{{.BINARY_NAME}}:{{.VERSION}}"
+
+  release-snapshot:
+    desc: Create a snapshot release with GoReleaser
+    preconditions:
+      - sh: command -v goreleaser
+        msg: "goreleaser is not installed. Install it with: go install github.com/goreleaser/goreleaser@latest"
+    cmds:
+      - goreleaser release --snapshot --clean

@@ -9,11 +9,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -35,7 +38,7 @@ const (
 
 // runCmd represents the run command
 var runCmd = &cobra.Command{
-	Use:   "run <prompt>",
+	Use:   "run [prompt]",
 	Short: "Run an AI development loop",
 	Long: `Run an AI development loop with a prompt.
 
@@ -58,6 +61,9 @@ Examples:
   # Dry run
   ralph run --dry-run "Update documentation"
 
+  # List models available to the authenticated Copilot user
+  ralph run --list-models
+
   # Override promise phrase
   ralph run --promise "Task complete!" "Fix bug"`,
 	Args: cobra.MaximumNArgs(1),
@@ -69,6 +75,7 @@ var (
 	runTimeout          time.Duration
 	runPromise          string
 	runModel            string
+	runListModels       bool
 	runWorkingDir       string
 	runDryRun           bool
 	runStreaming        bool
@@ -81,7 +88,8 @@ func init() {
 	runCmd.Flags().IntVarP(&runMaxIterations, "max-iterations", "m", 10, "maximum loop iterations")
 	runCmd.Flags().DurationVarP(&runTimeout, "timeout", "t", 30*time.Minute, "maximum loop runtime")
 	runCmd.Flags().StringVar(&runPromise, "promise", "I'm special!", "completion promise phrase")
-	runCmd.Flags().StringVar(&runModel, "model", "gpt-4", "AI model to use")
+	runCmd.Flags().StringVar(&runModel, "model", "auto", "AI model to use")
+	runCmd.Flags().BoolVar(&runListModels, "list-models", false, "list available AI models and exit")
 	runCmd.Flags().StringVar(&runWorkingDir, "working-dir", ".", "working directory for loop execution")
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "show what would be executed without running")
 	runCmd.Flags().BoolVar(&runStreaming, "streaming", true, "enable streaming responses")
@@ -92,6 +100,14 @@ func init() {
 
 // runLoop executes the AI development loop.
 func runLoop(cmd *cobra.Command, args []string) error {
+	if runListModels {
+		return listAvailableModels(cmd.Context())
+	}
+
+	if len(args) == 0 {
+		return errors.New("prompt is required (provide as argument or via stdin)")
+	}
+
 	// Resolve prompt from arguments, flag, or stdin
 	prompt, err := resolvePrompt(args[0])
 	if err != nil {
@@ -129,19 +145,25 @@ func runLoop(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create SDK client: %w", err)
 	}
-	defer sdkClient.Stop()
+	defer func() {
+		if stopErr := sdkClient.Stop(); stopErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to stop SDK client: %v\n", stopErr)
+		}
+	}()
+
+	baseCtx := cmd.Context()
+
+	// Set up signal handling for graceful shutdown
+	ctx, cancel := context.WithCancel(baseCtx)
+	defer cancel()
 
 	// Start SDK client
-	if err := sdkClient.Start(); err != nil {
+	if err := sdkClient.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start SDK client: %w", err)
 	}
 
 	// Create loop engine
 	engine := core.NewLoopEngine(loopConfig, sdkClient)
-
-	// Set up signal handling for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
@@ -226,6 +248,74 @@ func runLoop(cmd *cobra.Command, args []string) error {
 		os.Exit(exitFailed)
 	default:
 		os.Exit(exitFailed)
+	}
+
+	return nil
+}
+
+type availableModelsClient interface {
+	Start(ctx context.Context) error
+	Stop() error
+	ListModels(ctx context.Context) ([]sdk.Model, error)
+}
+
+func listAvailableModels(ctx context.Context) error {
+	client, err := sdk.NewCopilotClient(
+		sdk.WithWorkingDir(runWorkingDir),
+		sdk.WithLogLevel(runLogLevel),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create SDK client: %w", err)
+	}
+
+	return runModelListing(ctx, client, os.Stdout)
+}
+
+func runModelListing(ctx context.Context, client availableModelsClient, output io.Writer) (err error) {
+	if err := client.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start SDK client: %w", err)
+	}
+
+	defer func() {
+		if stopErr := client.Stop(); stopErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to stop SDK client: %w", stopErr))
+		}
+	}()
+
+	models, err := client.ListModels(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list available models: %w", err)
+	}
+
+	if len(models) == 0 {
+		if _, err := fmt.Fprintln(output, "No models available."); err != nil {
+			return fmt.Errorf("failed to write model list: %w", err)
+		}
+
+		return nil
+	}
+
+	sort.Slice(models, func(left, right int) bool {
+		return models[left].ID < models[right].ID
+	})
+
+	if _, err := fmt.Fprintln(output, "Available models:"); err != nil {
+		return fmt.Errorf("failed to write model list: %w", err)
+	}
+
+	table := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
+	if _, err := fmt.Fprintln(table, "ID\tNAME"); err != nil {
+		return fmt.Errorf("failed to write model list: %w", err)
+	}
+
+	for _, model := range models {
+		if _, err := fmt.Fprintf(table, "%s\t%s\n", model.ID, model.Name); err != nil {
+			return fmt.Errorf("failed to write model list: %w", err)
+		}
+	}
+
+	if err := table.Flush(); err != nil {
+		return fmt.Errorf("failed to write model list: %w", err)
 	}
 
 	return nil

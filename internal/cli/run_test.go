@@ -2,8 +2,11 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,7 +14,89 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/JanDeDobbeleer/copilot-ralph/internal/core"
+	"github.com/JanDeDobbeleer/copilot-ralph/internal/sdk"
 )
+
+type fakeAvailableModelsClient struct {
+	models      []sdk.Model
+	startErr    error
+	listErr     error
+	stopErr     error
+	startCalled bool
+	listCalled  bool
+	stopCalled  bool
+}
+
+func (client *fakeAvailableModelsClient) Start(_ context.Context) error {
+	client.startCalled = true
+	return client.startErr
+}
+
+func (client *fakeAvailableModelsClient) Stop() error {
+	client.stopCalled = true
+	return client.stopErr
+}
+
+func (client *fakeAvailableModelsClient) ListModels(_ context.Context) ([]sdk.Model, error) {
+	client.listCalled = true
+	return client.models, client.listErr
+}
+
+func TestRunModelListing(t *testing.T) {
+	t.Run("lists models sorted by ID", func(t *testing.T) {
+		client := &fakeAvailableModelsClient{
+			models: []sdk.Model{
+				{ID: "zeta", Name: "Zeta"},
+				{ID: "alpha", Name: "Alpha"},
+			},
+		}
+		var output bytes.Buffer
+
+		err := runModelListing(t.Context(), client, &output)
+
+		require.NoError(t, err)
+		assert.True(t, client.startCalled)
+		assert.True(t, client.listCalled)
+		assert.True(t, client.stopCalled)
+		assert.Contains(t, output.String(), "Available models:")
+		assert.Contains(t, output.String(), "ID")
+		assert.Contains(t, output.String(), "NAME")
+		assert.Less(t, strings.Index(output.String(), "alpha"), strings.Index(output.String(), "zeta"))
+	})
+
+	t.Run("reports an empty model list", func(t *testing.T) {
+		client := &fakeAvailableModelsClient{}
+		var output bytes.Buffer
+
+		err := runModelListing(t.Context(), client, &output)
+
+		require.NoError(t, err)
+		assert.Equal(t, "No models available.\n", output.String())
+		assert.True(t, client.stopCalled)
+	})
+
+	t.Run("returns start error", func(t *testing.T) {
+		client := &fakeAvailableModelsClient{startErr: assert.AnError}
+
+		err := runModelListing(t.Context(), client, &bytes.Buffer{})
+
+		require.ErrorIs(t, err, assert.AnError)
+		assert.False(t, client.listCalled)
+		assert.False(t, client.stopCalled)
+	})
+
+	t.Run("returns list and stop errors", func(t *testing.T) {
+		listErr := errors.New("list failed")
+		stopErr := errors.New("stop failed")
+		client := &fakeAvailableModelsClient{listErr: listErr, stopErr: stopErr}
+
+		err := runModelListing(t.Context(), client, &bytes.Buffer{})
+
+		require.ErrorIs(t, err, listErr)
+		require.ErrorIs(t, err, stopErr)
+		assert.True(t, client.stopCalled)
+	})
+}
 
 func TestRootCommandExists(t *testing.T) {
 	// Verify that the ralph root command can be invoked with --help
@@ -51,11 +136,12 @@ func TestDisplayEventsAndPrints(t *testing.T) {
 	displayEvents(events, cfg)
 
 	// Restore stdout and read
-	w.Close()
+	require.NoError(t, w.Close())
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	// Basic assertions that branches ran
@@ -79,11 +165,12 @@ func TestPrintLoopConfigAndSummary(t *testing.T) {
 	start := time.Now().Add(-2 * time.Second)
 	printSummary(result, start)
 
-	w.Close()
+	require.NoError(t, w.Close())
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 	out := buf.String()
 
 	assert.Contains(t, out, "Starting Ralph Loop")

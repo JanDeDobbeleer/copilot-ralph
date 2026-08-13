@@ -18,17 +18,19 @@ func TestRunVersionShort(t *testing.T) {
 	version.Version = "9.9.9"
 
 	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
 	os.Stdout = w
 	versionShort = true
 
 	runVersion(nil, nil)
 
-	w.Close()
+	require.NoError(t, w.Close())
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 	out := strings.TrimSpace(buf.String())
 
 	require.Equal(t, "9.9.9", out)
@@ -43,17 +45,19 @@ func TestRunVersionFull(t *testing.T) {
 	version.GoVersion = "go1.20"
 
 	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
 	os.Stdout = w
 	versionShort = false
 
 	runVersion(nil, nil)
 
-	w.Close()
+	require.NoError(t, w.Close())
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err = buf.ReadFrom(r)
+	require.NoError(t, err)
 	out := buf.String()
 
 	assert.Contains(t, out, "Ralph v1.2.3")

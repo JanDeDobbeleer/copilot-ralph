@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -25,13 +27,29 @@ func skipIfNoSDK(t *testing.T) {
 	}
 
 	// Check if copilot CLI is available
-	_, err := exec.LookPath("copilot")
+	cliPath, err := exec.LookPath("copilot")
 	if err != nil {
 		// On Windows, also check for copilot.cmd
-		_, err = exec.LookPath("copilot.cmd")
+		cliPath, err = exec.LookPath("copilot.cmd")
 		if err != nil {
 			t.Skip("Skipping test: copilot CLI not found in PATH")
 		}
+	}
+
+	if runtime.GOOS == "windows" {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	output, err := exec.CommandContext(ctx, cliPath, "--version").CombinedOutput()
+	if err != nil {
+		t.Skipf(
+			"Skipping test: copilot CLI is not runnable: %v (%s)",
+			err,
+			strings.TrimSpace(string(output)),
+		)
 	}
 }
 func TestNewCopilotClient(t *testing.T) {
@@ -116,11 +134,11 @@ func TestCopilotClientStartStop(t *testing.T) {
 		client, err := NewCopilotClient()
 		require.NoError(t, err)
 
-		err = client.Start()
+		err = client.Start(t.Context())
 		require.NoError(t, err)
 
 		// Starting again should be idempotent
-		err = client.Start()
+		err = client.Start(t.Context())
 		require.NoError(t, err)
 
 		err = client.Stop()
@@ -132,17 +150,51 @@ func TestCopilotClientStartStop(t *testing.T) {
 	})
 }
 
+type mockSDKClientStopper struct {
+	stopErr         error
+	stopCalled      bool
+	forceStopCalled bool
+}
+
+func (m *mockSDKClientStopper) Stop() error {
+	m.stopCalled = true
+	return m.stopErr
+}
+
+func (m *mockSDKClientStopper) ForceStop() {
+	m.forceStopCalled = true
+}
+
+func TestStopSDKClient(t *testing.T) {
+	stopper := &mockSDKClientStopper{stopErr: assert.AnError}
+
+	err := stopSDKClient(stopper)
+
+	if runtime.GOOS == "windows" {
+		require.NoError(t, err)
+		assert.True(t, stopper.forceStopCalled)
+		assert.False(t, stopper.stopCalled)
+		return
+	}
+
+	require.ErrorIs(t, err, assert.AnError)
+	assert.True(t, stopper.stopCalled)
+	assert.False(t, stopper.forceStopCalled)
+}
+
 func TestCopilotClientCreateSession(t *testing.T) {
 	// These tests are integration-only and require the copilot CLI; skip when CLI not available
 	t.Run("create session", func(t *testing.T) {
 		skipIfNoSDK(t)
 		client, err := NewCopilotClient()
 		require.NoError(t, err)
-		defer client.Stop()
+		defer func() {
+			require.NoError(t, client.Stop())
+		}()
 
 		// If SDK is not available, CreateSession will return an error "SDK client not initialized" when the client wasn't started.
 		// This expectation ensures tests behave correctly when SDK is absent.
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
@@ -153,13 +205,15 @@ func TestCopilotClientCreateSession(t *testing.T) {
 		skipIfNoSDK(t)
 		client, err := NewCopilotClient()
 		require.NoError(t, err)
-		defer client.Stop()
+		defer func() {
+			require.NoError(t, client.Stop())
+		}()
 
 		// Start the client to ensure sdkClient is initialized
-		err = client.Start()
+		err = client.Start(t.Context())
 		require.NoError(t, err)
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -169,9 +223,11 @@ func TestCopilotClientCreateSession(t *testing.T) {
 			WithSystemMessage("You are Ralph", "append"),
 		)
 		require.NoError(t, err)
-		defer client.Stop()
+		defer func() {
+			require.NoError(t, client.Stop())
+		}()
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
@@ -185,16 +241,18 @@ func TestCopilotClientDestroySession(t *testing.T) {
 		skipIfNoSDK(t)
 		client, err := NewCopilotClient()
 		require.NoError(t, err)
-		defer client.Stop()
+		defer func() {
+			require.NoError(t, client.Stop())
+		}()
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			// SDK may be missing; accept the known error message
 			assert.Contains(t, err.Error(), "SDK client not initialized")
 			return
 		}
 
-		err = client.DestroySession(context.Background())
+		err = client.DestroySession(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -202,9 +260,11 @@ func TestCopilotClientDestroySession(t *testing.T) {
 		skipIfNoSDK(t)
 		client, err := NewCopilotClient()
 		require.NoError(t, err)
-		defer client.Stop()
+		defer func() {
+			require.NoError(t, client.Stop())
+		}()
 
-		err = client.DestroySession(context.Background())
+		err = client.DestroySession(t.Context())
 		require.NoError(t, err)
 	})
 }
@@ -213,15 +273,49 @@ func TestCopilotClientSendPrompt(t *testing.T) {
 
 }
 
+func TestCopilotClientListModels(t *testing.T) {
+	t.Run("requires started client", func(t *testing.T) {
+		client, err := NewCopilotClient()
+		require.NoError(t, err)
+
+		models, err := client.ListModels(t.Context())
+
+		require.Error(t, err)
+		assert.Nil(t, models)
+		assert.Contains(t, err.Error(), "SDK client not initialized")
+	})
+
+	t.Run("lists available models", func(t *testing.T) {
+		skipIfNoSDK(t)
+		client, err := NewCopilotClient()
+		require.NoError(t, err)
+		defer func() {
+			require.NoError(t, client.Stop())
+		}()
+
+		require.NoError(t, client.Start(t.Context()))
+
+		models, err := client.ListModels(t.Context())
+
+		require.NoError(t, err)
+		require.NotEmpty(t, models)
+		for _, model := range models {
+			assert.NotEmpty(t, model.ID)
+		}
+	})
+}
+
 func TestCopilotClientConcurrency(t *testing.T) {
 	skipIfNoSDK(t)
 
 	t.Run("concurrent session access", func(t *testing.T) {
 		client, err := NewCopilotClient()
 		require.NoError(t, err)
-		defer client.Stop()
+		defer func() {
+			require.NoError(t, client.Stop())
+		}()
 
-		err = client.CreateSession(context.Background())
+		err = client.CreateSession(t.Context())
 		if err != nil {
 			if err.Error() == "SDK client not initialized" {
 				// SDK missing, accept this outcome
@@ -377,13 +471,8 @@ func TestSendPromptWithRetryCancelledContext(t *testing.T) {
 	client, err := NewCopilotClient()
 	assert.NoError(t, err)
 
-	// Create a fake sdk.Session with Send that returns error
-	// Define a minimal struct to illustrate intent; not used directly in assertions
-	type fakeSession struct{}
-	// Methods would be defined on fakeSession in a full mock, but are omitted here
-
 	// Can't inject this into client easily; instead test is limited to asserting client methods exist
-	assert.Equal(t, "gpt-4", client.Model())
+	assert.Equal(t, DefaultModel, client.Model())
 
 	// Ensure safeEventSender returns error on closed channel
 	events := make(chan Event, 1)
@@ -412,63 +501,6 @@ type errorString string
 
 func (e errorString) Error() string { return string(e) }
 
-// fakeSession implements the minimal subset of copilot.Session used by client.go
-type fakeSession struct {
-	sendFunc func()
-	handlers []func(copilot.SessionEvent)
-}
-
-func (f *fakeSession) On(h func(copilot.SessionEvent)) func() {
-	f.handlers = append(f.handlers, h)
-	idx := len(f.handlers) - 1
-	return func() {
-		// remove handler
-		f.handlers[idx] = nil
-	}
-}
-
-func (f *fakeSession) Send(opts any) (string, error) {
-	// Simulate asynchronous events being emitted
-	go func() {
-		handlers := append([]func(copilot.SessionEvent){}, f.handlers...)
-
-		// 1) streaming delta
-		for _, h := range handlers {
-			if h == nil {
-				continue
-			}
-			h(copilot.SessionEvent{Type: "assistant.message_delta", Data: copilot.Data{DeltaContent: ptrString("Hello ")}})
-		}
-
-		// 2) final message
-		for _, h := range handlers {
-			if h == nil {
-				continue
-			}
-			h(copilot.SessionEvent{Type: "assistant.message", Data: copilot.Data{Content: ptrString("Hello world")}})
-		}
-
-		// 3) session idle
-		for _, h := range handlers {
-			if h == nil {
-				continue
-			}
-			h(copilot.SessionEvent{Type: "session.idle"})
-		}
-	}()
-
-	if f.sendFunc != nil {
-		f.sendFunc()
-	}
-
-	return "msg-id", nil
-}
-
-func (f *fakeSession) Abort() error   { return nil }
-func (f *fakeSession) Destroy() error { return nil }
-
-func ptrString(s string) *string { return &s }
-
 // testEventDrainTimeout is used by tests that need to drain the events channel
 // without relying on the producer to close it. We use a short timeout to avoid
 // indefinite blocking in tests where the code under test may return early
@@ -492,28 +524,28 @@ func TestHandleSDKEventVariousTypes(t *testing.T) {
 	pending := make(map[string]ToolCall)
 
 	// assistant.message_delta
-	c.handleSDKEvent(copilot.SessionEvent{Type: "assistant.message_delta", Data: copilot.Data{DeltaContent: ptrString("part")}}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Data: &copilot.AssistantMessageDeltaData{DeltaContent: "part"}}, events, closeDone, pending)
 
 	// assistant.message
-	c.handleSDKEvent(copilot.SessionEvent{Type: "assistant.message", Data: copilot.Data{Content: ptrString("full")}}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Data: &copilot.AssistantMessageData{Content: "full"}}, events, closeDone, pending)
+
+	// assistant.reasoning_delta
+	c.handleSDKEvent(copilot.SessionEvent{Data: &copilot.AssistantReasoningDeltaData{DeltaContent: "thinking"}}, events, closeDone, pending)
 
 	// tool.execution_start
-	c.handleSDKEvent(copilot.SessionEvent{Type: "tool.execution_start", Data: copilot.Data{ToolName: ptrString("edit"), ToolCallID: ptrString("1"), Arguments: map[string]any{"path": "a.go"}}}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Data: &copilot.ToolExecutionStartData{ToolName: "edit", ToolCallID: "1", Arguments: map[string]any{"path": "a.go"}}}, events, closeDone, pending)
 
 	// tool.execution_complete success
-	// adapt to copilot.ToolResult fields
-	c.handleSDKEvent(copilot.SessionEvent{Type: "tool.execution_complete", Data: copilot.Data{ToolCallID: ptrString("1"), ToolName: ptrString("edit"), Result: &copilot.Result{Content: "ok"}, Success: ptrBool(true)}}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Data: &copilot.ToolExecutionCompleteData{ToolCallID: "1", Result: &copilot.ToolExecutionCompleteResult{Content: "ok"}, Success: true}}, events, closeDone, pending)
 
-	// tool.execution_complete failure with Error.String
-	errStr := "tool failed"
-	c.handleSDKEvent(copilot.SessionEvent{Type: "tool.execution_complete", Data: copilot.Data{ToolCallID: ptrString("2"), ToolName: ptrString("run"), Result: &copilot.Result{Content: ""}, Success: ptrBool(false), Error: &copilot.ErrorUnion{String: &errStr}}}, events, closeDone, pending)
+	// tool.execution_complete failure
+	c.handleSDKEvent(copilot.SessionEvent{Data: &copilot.ToolExecutionCompleteData{ToolCallID: "2", Result: &copilot.ToolExecutionCompleteResult{Content: ""}, Success: false, Error: &copilot.ToolExecutionCompleteError{Message: "tool failed"}}}, events, closeDone, pending)
 
 	// session.error
-	msg := "bad"
-	c.handleSDKEvent(copilot.SessionEvent{Type: "session.error", Data: copilot.Data{Message: &msg}}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Data: &copilot.SessionErrorData{Message: "bad"}}, events, closeDone, pending)
 
 	// session.idle should call closeDone
-	c.handleSDKEvent(copilot.SessionEvent{Type: "session.idle"}, events, closeDone, pending)
+	c.handleSDKEvent(copilot.SessionEvent{Data: &copilot.SessionIdleData{}}, events, closeDone, pending)
 
 	// Drain events and assert some expected types
 	received := []Event{}
@@ -523,7 +555,7 @@ loop:
 		select {
 		case ev := <-events:
 			received = append(received, ev)
-			if len(received) >= 6 {
+			if len(received) >= 7 {
 				break loop
 			}
 		case <-down:
@@ -550,8 +582,6 @@ loop:
 	assert.True(t, closed, "closeDone should be called on session.idle")
 }
 
-func ptrBool(b bool) *bool { return &b }
-
 func TestSendPromptOnceWithFakeSession(t *testing.T) {
 	c, err := NewCopilotClient()
 	require.NoError(t, err)
@@ -560,7 +590,7 @@ func TestSendPromptOnceWithFakeSession(t *testing.T) {
 	defer close(events)
 
 	// call sendPromptWithRetry with a canceled context to cover the cancellation early-return path
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	c.sendPromptWithRetry(ctx, "hello", events)
 	// no error expected; function returns after cancellation
@@ -580,18 +610,3 @@ drainLoop:
 		}
 	}
 }
-
-// testSessionAdapter adapts fakeSession to the concrete type expected by client.sendPromptOnce signature
-// by implementing the methods used by sendPromptOnce via compatible signatures.
-
-type testSessionAdapter struct{ inner *fakeSession }
-
-func (a *testSessionAdapter) On(h func(copilot.SessionEvent)) func() {
-	return a.inner.On(func(e copilot.SessionEvent) { h(copilot.SessionEvent{Type: e.Type, Data: copilot.Data{}}) })
-}
-func (a *testSessionAdapter) Send(opts copilot.MessageOptions) (string, error) {
-	// Delegate to inner and ignore options
-	return a.inner.Send(nil)
-}
-func (a *testSessionAdapter) Abort() error   { return a.inner.Abort() }
-func (a *testSessionAdapter) Destroy() error { return a.inner.Destroy() }

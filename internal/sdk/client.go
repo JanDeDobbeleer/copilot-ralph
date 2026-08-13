@@ -10,7 +10,9 @@ package sdk
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -20,7 +22,7 @@ import (
 
 // Default configuration values.
 const (
-	DefaultModel     = "gpt-4"
+	DefaultModel     = "auto"
 	DefaultLogLevel  = "info"
 	DefaultTimeout   = 60 * time.Second
 	DefaultStreaming = true
@@ -74,6 +76,26 @@ type CopilotClient struct {
 	timeout           time.Duration
 	streaming         bool
 	started           bool
+}
+
+// Model describes an AI model available to the authenticated Copilot user.
+type Model struct {
+	ID   string
+	Name string
+}
+
+type sdkClientStopper interface {
+	Stop() error
+	ForceStop()
+}
+
+func stopSDKClient(client sdkClientStopper) error {
+	if runtime.GOOS == "windows" {
+		client.ForceStop()
+		return nil
+	}
+
+	return client.Stop()
 }
 
 // clientConfig holds configuration options for the client.
@@ -173,20 +195,24 @@ func NewCopilotClient(opts ...ClientOption) (*CopilotClient, error) {
 	}, nil
 }
 
-// startLocked starts the client (must be called with lock held).
-func (c *CopilotClient) Start() error {
+// Start starts the client (must be called with lock held).
+func (c *CopilotClient) Start(ctx context.Context) error {
 	if c.started {
 		return nil
 	}
 
+	if ctx == nil {
+		return fmt.Errorf("context cannot be nil")
+	}
+
 	// Initialize the SDK client with options
 	c.sdkClient = copilot.NewClient(&copilot.ClientOptions{
-		LogLevel: c.logLevel,
-		Cwd:      c.workingDir,
+		LogLevel:         c.logLevel,
+		WorkingDirectory: c.workingDir,
 	})
 
 	// Start the SDK client
-	if err := c.sdkClient.Start(); err != nil {
+	if err := c.sdkClient.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start SDK client: %w", err)
 	}
 
@@ -200,20 +226,26 @@ func (c *CopilotClient) Stop() error {
 		return nil
 	}
 
+	var stopErr error
+
 	// Destroy any active SDK session
 	if c.sdkSession != nil {
-		_ = c.sdkSession.Destroy()
+		if err := c.sdkSession.Disconnect(); err != nil {
+			stopErr = errors.Join(stopErr, fmt.Errorf("failed to disconnect SDK session: %w", err))
+		}
 		c.sdkSession = nil
 	}
 
 	// Stop the SDK client
 	if c.sdkClient != nil {
-		_ = c.sdkClient.Stop()
+		if err := stopSDKClient(c.sdkClient); err != nil {
+			stopErr = errors.Join(stopErr, fmt.Errorf("failed to stop SDK client: %w", err))
+		}
 		c.sdkClient = nil
 	}
 
 	c.started = false
-	return nil
+	return stopErr
 }
 
 // CreateSession creates a new Copilot session.
@@ -225,8 +257,9 @@ func (c *CopilotClient) CreateSession(ctx context.Context) error {
 
 	// Build session config for the SDK
 	sessionConfig := &copilot.SessionConfig{
-		Model:     c.model,
-		Streaming: c.streaming,
+		Model:               c.model,
+		Streaming:           new(c.streaming),
+		OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
 	}
 
 	// Configure system message if provided
@@ -238,7 +271,7 @@ func (c *CopilotClient) CreateSession(ctx context.Context) error {
 	}
 
 	// Create SDK session
-	sdkSession, err := c.sdkClient.CreateSession(sessionConfig)
+	sdkSession, err := c.sdkClient.CreateSession(ctx, sessionConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create SDK session: %w", err)
 	}
@@ -254,7 +287,10 @@ func (c *CopilotClient) DestroySession(ctx context.Context) error {
 		return nil
 	}
 
-	_ = c.sdkSession.Destroy()
+	if err := c.sdkSession.Disconnect(); err != nil {
+		return fmt.Errorf("failed to disconnect SDK session: %w", err)
+	}
+
 	c.sdkSession = nil
 	return nil
 }
@@ -262,6 +298,28 @@ func (c *CopilotClient) DestroySession(ctx context.Context) error {
 // Model returns the configured model name.
 func (c *CopilotClient) Model() string {
 	return c.model
+}
+
+// ListModels returns the AI models available to the authenticated Copilot user.
+func (c *CopilotClient) ListModels(ctx context.Context) ([]Model, error) {
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	sdkModels, err := c.sdkClient.ListModels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list models: %w", err)
+	}
+
+	models := make([]Model, len(sdkModels))
+	for index, model := range sdkModels {
+		models[index] = Model{
+			ID:   model.ID,
+			Name: model.Name,
+		}
+	}
+
+	return models, nil
 }
 
 // SendPrompt sends a prompt to the Copilot SDK and returns an event stream.
@@ -371,8 +429,10 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, prompt string, event
 		default:
 		}
 
-		if event.Type == "session.error" && event.Data.Message != nil {
-			sessionErr = fmt.Errorf("SDK error: %s", *event.Data.Message)
+		if event.Type() == copilot.SessionEventTypeSessionError {
+			if data, ok := event.Data.(*copilot.SessionErrorData); ok {
+				sessionErr = fmt.Errorf("SDK error: %s", data.Message)
+			}
 		}
 
 		c.handleSDKEvent(event, events, closeDone, pendingToolCalls)
@@ -381,7 +441,7 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, prompt string, event
 	defer unsubscribe()
 
 	// Send the message
-	_, err := c.sdkSession.Send(copilot.MessageOptions{
+	_, err := c.sdkSession.Send(ctx, copilot.MessageOptions{
 		Prompt: prompt,
 	})
 	if err != nil {
@@ -393,7 +453,7 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, prompt string, event
 	case <-ctx.Done():
 		// Abort the session and close done to unblock any waiting
 		go func() {
-			_ = c.sdkSession.Abort()
+			_ = c.sdkSession.Abort(ctx)
 		}()
 
 		closeDone()
@@ -411,90 +471,93 @@ func (c *CopilotClient) sendPromptOnce(ctx context.Context, prompt string, event
 // handleSDKEvent processes events from the Copilot SDK and forwards them.
 // Uses safeEventSender to protect against writing to closed channels.
 func (c *CopilotClient) handleSDKEvent(sdkEvent copilot.SessionEvent, events chan<- Event, closeDone func(), pendingToolCalls map[string]ToolCall) {
-	switch sdkEvent.Type {
-	case "assistant.message_delta", "assistant.reasoning_delta":
-		if sdkEvent.Data.DeltaContent == nil {
+	switch sdkEvent.Type() {
+	case copilot.SessionEventTypeAssistantMessageDelta:
+		data, ok := sdkEvent.Data.(*copilot.AssistantMessageDeltaData)
+		if !ok {
 			return
 		}
 
-		_ = safeEventSender(events, NewTextEvent(*sdkEvent.Data.DeltaContent, strings.Contains(string(sdkEvent.Type), "reasoning")))
+		_ = safeEventSender(events, NewTextEvent(data.DeltaContent, false))
 
-	case "assistant.message", "assistant.reasoning":
-		// Complete assistant message
-		if sdkEvent.Data.Content == nil {
+	case copilot.SessionEventTypeAssistantReasoningDelta:
+		data, ok := sdkEvent.Data.(*copilot.AssistantReasoningDeltaData)
+		if !ok {
 			return
 		}
 
-		_ = safeEventSender(events, NewTextEvent(*sdkEvent.Data.Content, strings.Contains(string(sdkEvent.Type), "reasoning")))
+		_ = safeEventSender(events, NewTextEvent(data.DeltaContent, true))
 
-	case "tool.execution_start":
-		// Tool execution started - the SDK handles this internally
-		// We just track it for logging/UI purposes and to match with completion events
-		if sdkEvent.Data.ToolName == nil {
+	case copilot.SessionEventTypeAssistantMessage:
+		data, ok := sdkEvent.Data.(*copilot.AssistantMessageData)
+		if !ok {
+			return
+		}
+
+		_ = safeEventSender(events, NewTextEvent(data.Content, false))
+
+	case copilot.SessionEventTypeAssistantReasoning:
+		data, ok := sdkEvent.Data.(*copilot.AssistantReasoningData)
+		if !ok {
+			return
+		}
+
+		_ = safeEventSender(events, NewTextEvent(data.Content, true))
+
+	case copilot.SessionEventTypeToolExecutionStart:
+		data, ok := sdkEvent.Data.(*copilot.ToolExecutionStartData)
+		if !ok {
 			return
 		}
 
 		toolCall := ToolCall{
-			Name: *sdkEvent.Data.ToolName,
+			ID:   data.ToolCallID,
+			Name: data.ToolName,
 		}
 
-		if sdkEvent.Data.ToolCallID != nil {
-			toolCall.ID = *sdkEvent.Data.ToolCallID
-			// Store for matching with completion event
-			pendingToolCalls[toolCall.ID] = toolCall
-		}
+		pendingToolCalls[toolCall.ID] = toolCall
 
-		// Type assert Arguments to map[string]interface{} if possible
-		if args, ok := sdkEvent.Data.Arguments.(map[string]any); ok {
+		if args, ok := data.Arguments.(map[string]any); ok {
 			toolCall.Parameters = args
 		}
 
 		_ = safeEventSender(events, NewToolCallEvent(toolCall))
 
-	case "tool.execution_complete":
-		// Tool execution completed - emit result event with actual result from SDK
-		var toolCall ToolCall
-		if sdkEvent.Data.ToolCallID != nil {
-			if tc, ok := pendingToolCalls[*sdkEvent.Data.ToolCallID]; ok {
-				toolCall = tc
-				delete(pendingToolCalls, *sdkEvent.Data.ToolCallID)
-			}
+	case copilot.SessionEventTypeToolExecutionComplete:
+		data, ok := sdkEvent.Data.(*copilot.ToolExecutionCompleteData)
+		if !ok {
+			return
 		}
 
-		if toolCall.Name == "" && sdkEvent.Data.ToolName != nil {
-			toolCall.Name = *sdkEvent.Data.ToolName
+		var toolCall ToolCall
+		if tc, ok := pendingToolCalls[data.ToolCallID]; ok {
+			toolCall = tc
+			delete(pendingToolCalls, data.ToolCallID)
 		}
 
 		var result string
 		var toolErr error
 
-		if sdkEvent.Data.Result != nil {
-			result = sdkEvent.Data.Result.Content
+		if data.Result != nil {
+			result = data.Result.Content
 		}
 
-		if sdkEvent.Data.Success != nil && !*sdkEvent.Data.Success {
-			if sdkEvent.Data.Error != nil {
-				// ErrorUnion can be either ErrorClass or String
-				if sdkEvent.Data.Error.ErrorClass != nil {
-					toolErr = fmt.Errorf("%s", sdkEvent.Data.Error.ErrorClass.Message)
-				} else if sdkEvent.Data.Error.String != nil {
-					toolErr = fmt.Errorf("%s", *sdkEvent.Data.Error.String)
-				}
-			}
+		if !data.Success && data.Error != nil {
+			toolErr = fmt.Errorf("%s", data.Error.Message)
 		}
 
 		_ = safeEventSender(events, NewToolResultEvent(toolCall, result, toolErr))
 
-	case "session.idle":
+	case copilot.SessionEventTypeSessionIdle:
 		// Session has finished processing
 		closeDone()
 
-	case "session.error":
-		// Error event
-		if sdkEvent.Data.Message == nil {
+	case copilot.SessionEventTypeSessionError:
+		data, ok := sdkEvent.Data.(*copilot.SessionErrorData)
+		if !ok {
 			return
 		}
 
-		_ = safeEventSender(events, NewErrorEvent(fmt.Errorf("SDK error: %s", *sdkEvent.Data.Message)))
+		_ = safeEventSender(events, NewErrorEvent(fmt.Errorf("SDK error: %s", data.Message)))
 	}
 }

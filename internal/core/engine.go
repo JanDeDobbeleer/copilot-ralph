@@ -59,7 +59,7 @@ func (e *LoopEngine) Start(ctx context.Context) (*LoopResult, error) {
 
 	// Initialize SDK if provided
 	if e.sdk != nil {
-		if err := e.sdk.Start(); err != nil {
+		if err := e.sdk.Start(e.ctx); err != nil {
 			return e.fail(fmt.Errorf("failed to start SDK: %w", err))
 		}
 
@@ -74,17 +74,19 @@ func (e *LoopEngine) Start(ctx context.Context) (*LoopResult, error) {
 
 	// Clean up SDK - do it in background if cancelled for immediate return
 	if e.sdk != nil {
+		cleanupBaseCtx := context.WithoutCancel(e.ctx)
+
 		if result != nil && result.State == StateCancelled {
 			// Background cleanup on cancellation - don't wait
 			go func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 1*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupBaseCtx, 1*time.Second)
 				defer cleanupCancel()
 				_ = e.sdk.DestroySession(cleanupCtx)
 				_ = e.sdk.Stop()
 			}()
 		} else {
 			// Normal cleanup - wait for completion
-			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			cleanupCtx, cleanupCancel := context.WithTimeout(cleanupBaseCtx, 5*time.Second)
 			_ = e.sdk.DestroySession(cleanupCtx)
 			cleanupCancel()
 			_ = e.sdk.Stop()
@@ -234,7 +236,7 @@ func (e *LoopEngine) buildIterationPrompt(iteration int) string {
 	var builder strings.Builder
 
 	// Add iteration context
-	builder.WriteString(fmt.Sprintf("[Iteration %d/%d]\n\n", iteration, e.config.MaxIterations))
+	fmt.Fprintf(&builder, "[Iteration %d/%d]\n\n", iteration, e.config.MaxIterations)
 
 	// Add original task prompt
 	builder.WriteString(e.config.Prompt)
